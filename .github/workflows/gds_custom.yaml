@@ -1,0 +1,39 @@
+name: gds_custom
+
+# Submits a locally hardened GDS (the TT07 way: build.py with the RAM32 DFFRAM
+# macro, results copied to gds/, lef/ and pnl/) instead of hardening in the
+# action.  Run it by hand once those files are committed.
+
+on:
+  workflow_dispatch:
+
+jobs:
+  gds:
+    runs-on: ubuntu-24.04
+    steps:
+      - name: checkout repo
+        uses: actions/checkout@v6
+        with:
+          submodules: recursive
+
+      - name: Read top module name
+        uses: mikefarah/yq@v4
+        id: top_module
+        with:
+          cmd: echo TOP_MODULE=`yq '.project.top_module' info.yaml` > $GITHUB_OUTPUT
+
+      - name: Create and publish the GDS artifact
+        uses: TinyTapeout/tt-gds-action/custom_gds@ttsky26c
+        with:
+          pdk: sky130A
+          top_module: ${{ steps.top_module.outputs.TOP_MODULE }}
+          gds_path: gds/${{ steps.top_module.outputs.TOP_MODULE }}.gds
+          lef_path: lef/${{ steps.top_module.outputs.TOP_MODULE }}.lef
+          verilog_path: pnl/${{ steps.top_module.outputs.TOP_MODULE }}.pnl.v
+
+  precheck:
+    needs: gds
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Run Tiny Tapeout Precheck
+        uses: TinyTapeout/tt-gds-action/precheck@ttsky26c

@@ -1,0 +1,16 @@
+    +----------+                               +-------------+                                 
+    |     [7:0]+---------+           +---------+    8-Bit    |                                 
+    |          |     imm v           v         | Accumulator |                                 
+    |  Opcode  |      ------       ------      +-------------+                                  
+    |          | op    \    \_____/{pb}/              ^ {pr}  
+    |   [15:10]+------> \     ALU     /               |                                          
+    +----------+         \-----------/                |                                            
+      {pt}                  |     |                   |                                          
+                            v     +-------------------+                                          
+                       +---------+                                                               
+                       |  Flags  |{pr}                                                     
+                       +---------+                                                         
+                       
+    <h5>Figure 974.5: Accumulator Direct Operations Diagram</hh>
+                                                                                      
+{:FILE scale 0.9 theme light font-size 10}
