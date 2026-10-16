@@ -533,9 +533,18 @@ for loading code). By design; keep, and keep it out of the debuggers' polls
   setup +5.6 ns nominal (+5.2 before), -7.0 at ss (the SDC items above),
   utilization 64% (69%), every power port box full height. Not the
   submission yet: adopting it is a copy of `macros_ao/` over `macros/`, the
-  location and halo into macro.json, and a rebuild; the 80 x 136 um it
-  frees would be worth a fresh placement (the anchored one leaves them
-  empty).
+  location and halo into macro.json, and a rebuild. Ken's point: the
+  anchored placement leaves the freed 80 x 136 um to decap, so
+  `trial_ao_free.json` runs the same with no anchor table - the placer's
+  (padded) utilization drops from 80% to 75%, the dense bins from 18 to
+  15, the UART/debug corner's rows to 86%, and runs/macro-ao4 signed off
+  on its own draw: routed clean in 20 iterations (clean builds: 24-40),
+  Magic DRC 0, LVS clean, antenna clean, IR drop 0.3 mV, hold met, setup
+  +5.5 ns nominal / -6.1 at ss (the best so far; fix7 -7.4, ao3 -7.0),
+  wirelength 829K um, utilization 65%, every power port box full height,
+  20 minutes. The smaller macro moves the design away from the
+  routability threshold; an anchor table dumped from ao4
+  (`placements/macro-ao4_final_cells.json`) makes that draw repeatable.
 * Found on the way: Yosys names a flattened net after any alias (the
   debugger's data bus is `core_inst_o[*]` in the netlist), the breakpoint
   registers are latches, and OpenSTA's `read_sdc` fails on an exception
