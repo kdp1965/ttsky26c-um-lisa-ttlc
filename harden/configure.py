@@ -3,7 +3,8 @@
 built the way tt-support-tools' --create-user-config does it: the sources,
 die area and floorplan template from ../info.yaml's tile, merged over
 ../src/config.json; with --macro, macro.json on top (the RAM32 DFFRAM macro
-in place of src/RAM32.v).  Writes config_merged.json."""
+in place of src/RAM32.v).  Writes config_merged.json, or config_merged_macro.json
+with --macro, so the two flows can run at the same time."""
 import json
 import os
 import sys
@@ -62,7 +63,7 @@ def main():
         if type(v) is int and v in (0, 1) and (k.startswith(BOOL_PREFIXES) or k in BOOL_KEYS):
             cfg[k] = bool(v)
     cfg = {k: v for k, v in cfg.items() if k != "//"}
-    out = os.path.join(HERE, "config_merged.json")
+    out = os.path.join(HERE, "config_merged_macro.json" if macro else "config_merged.json")
     with open(out, "w", encoding="utf8") as f:
         json.dump(cfg, f, indent=2)
     print("%s: %s tile %s, %d sources%s" % (out, info["top_module"], tiles, len(sources),

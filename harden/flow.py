@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """flow.py [--macro] [run-tag] - harden tt_um_lisa locally with LibreLane's
-Classic flow on config_merged.json (configure.py).  With --macro the RAM32
+Classic flow on config_merged.json (configure.py; config_merged_macro.json
+with --macro).  With --macro the RAM32
 DFFRAM macro is in the design and one extra step runs the tile's vertical
 power stripes across its pin columns after the PDN is generated (the
 single-layer tile PDN does not reach a macro's pins by itself).
@@ -34,7 +35,8 @@ class MacroFlow(Classic):
 def main():
     macro = "--macro" in sys.argv
     args = [a for a in sys.argv[1:] if not a.startswith("--")]
-    cfg = json.load(open(os.path.join(HERE, "config_merged.json"), encoding="utf8"))
+    merged = "config_merged_macro.json" if macro else "config_merged.json"
+    cfg = json.load(open(os.path.join(HERE, merged), encoding="utf8"))
     cfg["PDK"] = "sky130A"
     flow_class = MacroFlow if macro else Classic
     flow = flow_class(cfg, design_dir=HERE, pdk_root=os.environ["PDK_ROOT"])

@@ -41,6 +41,6 @@ shell:
 	nix-shell $(LIBRELANE)/shell.nix
 
 clean:
-	rm -rf runs config_merged.json
+	rm -rf runs config_merged.json config_merged_macro.json
 
 .PHONY: standard macro status harden-stop shell clean

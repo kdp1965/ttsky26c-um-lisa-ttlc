@@ -11,6 +11,9 @@
   "//": "CLOCK_PERIOD in ns: 30 ns == 33 MHz, the TT07 constraint (its impl.sdc; the chip runs at 66 MHz).",
   "CLOCK_PERIOD": 30,
 
+  "//": "PL_MAX_DISPLACEMENT_Y - the legalizer may move a cell this far (um; 100 by default): the short rows beside the RAM32 macro (146 um tall) run ~90% full and after the hold buffers a few cells there have to leave the pocket.",
+  "PL_MAX_DISPLACEMENT_Y": 300,
+
   "//": "Hold slack margin - increase in case of hold violations.",
   "PL_RESIZER_HOLD_SLACK_MARGIN": 0.1,
   "GRT_RESIZER_HOLD_SLACK_MARGIN": 0.05,
