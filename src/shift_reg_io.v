@@ -129,8 +129,10 @@ module shift_reg_io
                else
                   clk_count <= clk_count - 1;
                
-               // Update input data at the rising edge of shift_clk
-               if (!shift_clk && clk_count == 0)  // Operate on rising edge of shift_clk
+               // Update input data at the rising edge of shift_clk - the 16
+               // real ones: after the last falling edge the clock is held
+               // (last_clk) and TT07 still took a 17th sample here
+               if (!shift_clk && clk_count == 0 && !last_clk)  // Operate on rising edge of shift_clk
                begin  
                   // Shifting input data in, and preparing output data
                   input_buffer_reg[SEG_WIDTH-1:0]             <= {input_buffer_reg[SEG_WIDTH-2:0], data_in[0]};

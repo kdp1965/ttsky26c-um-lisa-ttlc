@@ -194,14 +194,11 @@ module lisa_div
             end
            
             s_compute : begin
-               // Test for divide by zero
+               // Test for divide by zero: the quotient all ones, the
+               // remainder the dividend (b holds it)
                if (div_rs2 == 0)
                begin
-                  // Remainder equals rs1
-                  if (op_any_rem)
-                     b <= div_rs2;
-                  else
-                     // DIV is all 1 when /0
+                  if (!op_any_rem)
                      result <= { `XPR_LEN{1'b1}};
 
                   // Force counter to zero
@@ -210,12 +207,13 @@ module lisa_div
                end
                else if (abs_in_1 == 1)
                begin
-                  // Remainder equals 0
+                  // by one: the remainder 0, the quotient the dividend - the
+                  // latched one (b): abs_in_2 is built from RA, which the
+                  // start cleared, so TT07 kept only the low byte here
                   if (op_any_rem)
                      b <= {`XPR_LEN{1'b0}};
                   else
-                     // Result equals input
-                     result <= abs_in_2;
+                     result <= b;
 
                   state <= s_setup_output;
                end
@@ -249,7 +247,10 @@ module lisa_div
             end // case: s_compute
             s_setup_output : 
             begin
+               // the 16-bit result in RA: bits 14:0 in ra, bit 15 as ra_cond,
+               // so xchg ra / txau read it whole
                result <= final_result;
+               cond   <= final_result[15];
                state <= s_done;
             end
             s_done:

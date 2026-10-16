@@ -230,6 +230,9 @@ module lisa_core
    wire                       cflag;
    reg                        cflag_save;
    reg                        cflag_isr;
+   reg                        cflag_save_isr;         // the ISR shadows of what rets restores:
+   reg  [2:0]                 amode_isr;              // cflag_save, amode, the live signed inversion
+   reg                        signed_inv_live_isr;
    wire                       signed_inversion;
    reg                        signed_valid;
    reg                        signed_inv_save;
@@ -368,6 +371,7 @@ module lisa_core
    wire                       op_eidi;
    wire                       op_notz;
    wire                       op_amode;
+   wire                       op_ldamode;
    (* keep="true" *)
    wire                       op_div_start;
    reg                        op_div_start_r;
@@ -442,6 +446,7 @@ module lisa_core
    reg                        op_eidi_r;
    reg                        op_notz_r;
    reg                        op_amode_r;
+   reg                        op_ldamode_r;
    (* keep="true" *)
    reg                        op_add_r;
    reg                        op_sub_r;
@@ -512,8 +517,24 @@ module lisa_core
    wire                       dbg_ready_c;
    wire                       stop;
    wire                       cont_q;
+   wire                       cflag_load;
+   wire                       irq_pending;            // an enabled interrupt the instruction in exec can give way to
+   wire                       irq_take;               // ... and it does, this clock
+   wire                       stg2_next;              // the instruction in exec goes on to its second stage
 
    assign inst = (inst_ready & !d_we_r) ? inst_i : inst_r;
+
+   // An interrupt is taken after an instruction that leaves no predicate and
+   // no second word pending: not after if/iftt/ifte, nor the first word of
+   // ldx, lddiv or a two-word div/rem (TT07 took it there too, and lost the
+   // predicate or ran the literal as an opcode after rets).
+   assign stg2_next   = (cond[0] && (op_sra_r | op_lra_r | op_push_ix_r | op_pop_ix_r | op_stxx_r | op_ldxx_r | op_fdiv_r |
+                                     (op_any_div & inst_r[0]))) || div_stage_two || rem_stage_two || op_fops;
+   // Nor after ei/di, stirq or xchg ia, whose effect the entry would undo.
+   assign irq_pending = ie & cond[1] & |(int_i & int_en) &
+                        ~(cond[0] & (op_if_r | op_ldx_r | op_lddiv_r | (op_any_div & ~inst[0]) |
+                                     op_eidi_r | op_stirq_r | op_xchg_ia_r));
+   assign irq_take    = exec_state & d_ok & ~stg2_next & irq_pending;
    assign fetch_state  = state == 3'b000;
    assign predec_state = state == 3'b001;
    assign decode_state = state == 3'b010;
@@ -601,7 +622,8 @@ module lisa_core
    assign op_ldz      = inst[`PWORD_SIZE-1 -: 12] == 12'b10_1000_0001_10;
    assign op_notz     = inst[`PWORD_SIZE-1 -: 14] == 14'b10100000011101;
    assign op_eidi     = inst[`PWORD_SIZE-1 -: 14] == 14'b10100000011110;
-   assign op_amode    = inst[`PWORD_SIZE-1 -: 12] == 12'b101000010100;
+   assign op_amode    = inst[`PWORD_SIZE-1 -: 13] == 13'b1010000101000;     // amode #m: 0xa140 | m
+   assign op_ldamode  = inst[`PWORD_SIZE-1 -: 13] == 13'b1010000101001;     // ldamode: A <= {ie, amode}, 0xa148
 `ifdef WANT_BF16
    assign op_tfa      = inst[`PWORD_SIZE-1 -: 15] == 15'b101000011110000;
    assign op_taf      = inst[`PWORD_SIZE-1 -: 15] == 15'b101000011110001;
@@ -638,19 +660,25 @@ module lisa_core
    assign sp_sum   = sp + sp_adder;
    assign sp_addr  = sp + {{(D_BITS-D_STCK){1'b0}}, inst[D_STCK-1:0]};
 
+   // The adder: a real carry-in (TT07 folded it into the 8-bit operand, so
+   // adc #0xff with C set added 0, and sub / cmp of a zero operand borrowed).
+   // add has none by design; sub is A + ~M + !C (A - M - C); cmp / cpi are
+   // A + ~M + 1, C the borrow.
+   reg                        acc_cin;
    always @*
    begin
       acc_adder = d_i;
+      acc_cin   = 1'b0;
       case (1'b1)
-         op_adc_r:   acc_adder = inst[7:0] + {7'h0, cflag};      // adc
-         op_cpi_r:   acc_adder = ~inst[7:0] + 1;                 // cpi
-         op_sub_r:   acc_adder = ~(d_i + {7'h0, cflag}) + 8'h1;  // sub (sbb)
-         op_cmp_r:   acc_adder = ~d_i + 1;                       // cmp
+         op_adc_r:   begin acc_adder = inst[7:0];  acc_cin = cflag;  end   // adc
+         op_cpi_r:   begin acc_adder = ~inst[7:0]; acc_cin = 1'b1;   end   // cpi
+         op_sub_r:   begin acc_adder = ~d_i;       acc_cin = ~cflag; end   // sub (sbb)
+         op_cmp_r:   begin acc_adder = ~d_i;       acc_cin = 1'b1;   end   // cmp
       endcase
    end
    // ACC math
-   assign acc_sum = acc + acc_adder;
-   assign c_cpi = inst[7:0] > acc;
+   assign acc_sum = {1'b0, acc} + {1'b0, acc_adder} + {8'h0, acc_cin};
+   assign c_cpi = ~acc_sum[8];
 
    assign i_addr = pc;
    assign i_fetch = fetch_state  & !stop;
@@ -658,15 +686,14 @@ module lisa_core
    assign inst_we = stop && dbg_a == 8'hf && dbg_we == 1'b1;
    assign d_o_shr_val = (amode[0] & cflag) | (amode[1] & d_i[7]);
 
-   assign   non_acc_d_o = op_sra_r | op_push_ix_r | op_stxx_r | op_dcx_r | op_inx_r | op_shr16_r | op_shl16_r |
-                          op_any_div | div_stage_two | rem_stage_two;
+   assign   non_acc_d_o = op_sra_r | op_push_ix_r | op_stxx_r | op_dcx_r | op_inx_r | op_shr16_r | op_shl16_r;
    always @*
    begin
       if (dbg_d_access)
          d_o = dbg_d_o;
       else
       begin
-         if (stop)
+         if (stop && !d_we_r)               // not while a store is still landing
             d_o = dbg_di[7:0];
          else if (non_acc_d_o)
          begin
@@ -682,8 +709,6 @@ module lisa_core
             op_inx_r:                       d_o = d_i+8'h1;
             op_shr16_r:                     d_o = {d_o_shr_val, d_i[7:1]};
             op_shl16_r:                     d_o = {d_i[6:0], acc[7]};
-            op_any_div | div_stage_two |
-                  rem_stage_two :           d_o = div_result[15:8];
             default:                        d_o = 8'hxx;
             endcase
          end
@@ -703,15 +728,24 @@ module lisa_core
                        lddiv_stage_two | op_lra_r | op_add_r | op_sub_r | op_cmp_r | op_dcx_r | op_inx_r |
                        op_ldxx_r | op_and_r | op_or_r | (op_swapi_r & !inst[9] & !dbg_d_access) | op_xor_r | op_swap_r |
                        (op_lda_r & !inst[9] & !dbg_d_access) | op_ldax_r;
-   assign dbg_ready  = (dbg_d_access & !d_periph) ? d_ready_r : dbg_ready_c;
+   // a debugger RAM access is ready when the cache says so AND the debug
+   // block's own delay has passed: with the cache off d_ready is always 1,
+   // and TT07 answered in the first clock with RAM[IX] still on the bus
+   assign dbg_ready  = (dbg_d_access & !d_periph) ? (d_ready_r & dbg_ready_c) : dbg_ready_c;
    assign d_rd       = dbg_d_access ? dbg_d_rd : d_periph & cond[0] & exec_state;
    assign dbg_inc    = (dbg_we | dbg_rd) && dbg_a == 8'hf;
-   assign sp_sum_op  = op_sra_r | op_lra_r | op_ads_r | op_pop_a_r | op_push_a_r | (op_swap_r & inst[9]) |
+   // swap n(sp) takes the sp_addr path like every other n(sp) operand (TT07
+   // sent it through the ads adder, which sign-extended the select bit: -512)
+   assign sp_sum_op  = op_sra_r | op_lra_r | op_ads_r | op_pop_a_r | op_push_a_r |
                        op_push_ix_r | op_pop_ix_r | op_stxx_r | op_ldxx_r | op_shl16_r | op_shr16_r | div_stage_two |
                        rem_stage_two | lddiv_stage_two;
    assign d_addr_imm = inst[`PWORD_SIZE-6] == 1'b1 && inst[`PWORD_SIZE-4] == 1'b1 &&
                        inst[`PWORD_SIZE-2] == 1'b1;
-   assign d_addr = dbg_d_access ? dbg_d_addr : stop ? ix : d_addr_imm ? {{(D_BITS-D_STCK){1'b0}}, inst[D_STCK-1:0]} : (sp_sum_op) ? sp_sum :
+   // halted, the data address is IX (register 6 reads RAM[IX]) - but not
+   // before a pending store has landed: a breakpoint on the instruction after
+   // a store halts in the store's write clock, and TT07 then wrote the
+   // debugger's last data byte to RAM[IX] and lost the store
+   assign d_addr = dbg_d_access ? dbg_d_addr : (stop && !d_we_r) ? ix : d_addr_imm ? {{(D_BITS-D_STCK){1'b0}}, inst[D_STCK-1:0]} : (sp_sum_op) ? sp_sum :
                         inst[9] ? sp_addr : ix_addr;
    assign acc_mul = acc * d_i;
    assign acc_muls = $signed(acc) * $signed(d_i);
@@ -735,6 +769,7 @@ module lisa_core
       op_txau_r:           {acc_ld_misc, acc_misc} = {1'b1, ix_cond, ix[(PC_BITS-1):8]};    // taxu
       op_div_r | op_rem_r: {acc_ld_misc, acc_misc} = {div_ready, div_result[7:0]};          // div,etc
       op_ldac_r:           {acc_ld_misc, acc_misc} = {1'b1, 7'h0, cond_load};               // ldac
+      op_ldamode_r:        {acc_ld_misc, acc_misc} = {1'b1, 4'h0, ie, amode};                // ldamode
 `ifdef WANT_BF16
       op_tfa_r:            if (inst[1] == 1'b0)
                             {acc_ld_misc, acc_misc} = {1'b1, f_half[inst[0]]};             // tfa
@@ -766,7 +801,7 @@ module lisa_core
       op_xor_r:   acc_load_val = {1'b1, acc ^ d_i};
       op_lda_r || op_ldax_r:  acc_load_val = {1'b1, d_i};
       op_ld_misc_r:           if (acc_ld_misc) acc_load_val = {1'b1, acc_misc};  
-      op_ldirq_r: acc_load_val = {1'b1, 5'h0, signed_inv_isr, zflag_isr, cflag_isr};
+      op_ldirq_r: acc_load_val = {1'b1, amode_isr, signed_inv_live_isr, cflag_save_isr, signed_inv_isr, zflag_isr, cflag_isr};
       endcase
    end
 
@@ -814,7 +849,7 @@ module lisa_core
       op_shl_r:  c_val                 = acc[7];
       op_shr_r:  c_val                 = acc[0];
       op_ldc_r:  c_val                 = inst[0];
-      op_cpi_r:  c_val                 = amode[1] ? ~acc_sum[8] : c_cpi;
+      op_cpi_r:  {signed_valid, c_val} = {1'b1, c_cpi};          // cpi: the signed inversion too
       op_cpx_ra: c_val                 = ix < ra;
       op_cpx_sp: c_val                 = ix < sp[D_BITS-1:0];
       op_restc_r:c_val                 = cflag_save;
@@ -913,6 +948,7 @@ module lisa_core
          op_eidi_r <= 1'b0;
          op_notz_r <= 1'b0;
          op_amode_r <= 1'b0;
+         op_ldamode_r <= 1'b0;
          op_add_r <= 1'b0;
          op_sub_r <= 1'b0;
          op_and_r <= 1'b0;
@@ -1003,6 +1039,7 @@ module lisa_core
          op_eidi_r <= op_eidi;
          op_notz_r <= op_notz;
          op_amode_r <= op_amode;
+         op_ldamode_r <= op_ldamode;
          op_add_r <= op_add;
          op_sub_r <= op_sub;
          op_and_r <= op_and;
@@ -1102,6 +1139,9 @@ module lisa_core
          cflag_isr <= 1'b0;
          zflag_isr <= 1'b0;
          signed_inv_isr <= 1'b0;
+         cflag_save_isr <= 1'b0;
+         signed_inv_live_isr <= 1'b0;
+         amode_isr <= 3'h1;
       end
       else
       begin
@@ -1124,6 +1164,9 @@ module lisa_core
             cflag_isr <= 1'b0;
             zflag_isr <= 1'b0;
             signed_inv_isr <= 1'b0;
+            cflag_save_isr <= 1'b0;
+            signed_inv_live_isr <= 1'b0;
+            amode_isr <= 3'h1;
          end
          else
          case (1'b1)
@@ -1180,7 +1223,7 @@ module lisa_core
                state <= 3'h0;
             end
 
-            // If breakpoint, return to fetch state
+            // brk: halt here (the debugger's resume or step runs it as a nop)
             else if (cond[0] && op_brk_r && !cont_q)
                state <= 3'h0;
 
@@ -1194,24 +1237,29 @@ module lisa_core
                if (d_ok)
                begin
                   // Test for 2-stage operations
-                  if ((cond[0] && (op_sra_r | op_lra_r | op_push_ix_r | op_pop_ix_r | op_stxx_r | op_ldxx_r | op_fdiv_r |
-                           (op_any_div & inst_r[0]))) || div_stage_two || rem_stage_two || op_fops)
+                  if (stg2_next)
                   begin
                      // Go to state 4
                      state <= 3'h4;
                   end
                   else
                   begin
-                     // TODO:  Add interrupt capability
-                     if (ie & cond[1] && |(int_i & int_en))
+                     if (irq_pending)
                      begin
                         // The interrupt return address is the next PC
                         ia <= pc_inc;
                         isr_jump <= 1'b1;
                         ie <= 1'b0;
-                        cflag_isr <= cflag;
-                        zflag_isr <= zflag;
-                        signed_inv_isr <= signed_inv_save;
+                        // the shadows take the state the interrupted instruction
+                        // leaves behind - its own flag write lands in this clock
+                        // (TT07 shadowed the values before it: after ldc #1 the
+                        // carry came back clear)
+                        cflag_isr <= cflag_load ? c_val : cflag;
+                        zflag_isr <= zflag_load ? zflag_val : zflag;
+                        signed_inv_isr <= (op_savec_r & cond[0]) ? signed_inversion : signed_inv_save;
+                        cflag_save_isr <= (op_savec_r & cond[0]) ? cflag : cflag_save;
+                        signed_inv_live_isr <= cflag_load ? signed_inv_val : signed_inversion;
+                        amode_isr <= (op_amode_r & cond[0]) ? inst[2:0] : amode;
                         casez (int_i & int_en)
                         8'b???????1: pc <= PC_BITS'(1);
                         8'b??????10: pc <= PC_BITS'(2);
@@ -1243,14 +1291,20 @@ module lisa_core
                            cflag_isr <= acc[0];
                            zflag_isr <= acc[1];
                            signed_inv_isr <= acc[2];
+                           cflag_save_isr <= acc[3];
+                           signed_inv_live_isr <= acc[4];
+                           amode_isr <= acc[7:5];
                         end
                      end
                      state <= 3'h0;
                   end
                end
 
-               // Test for stax ix+imm8 operation or swap a,[ix+imm8]
-               if (cond[0] && (op_st_r || op_swap_r || op_swapi_r || op_sra_r || op_push_a_r ||
+               // Test for stax ix+imm8 operation or swap a,[ix+imm8]: the write
+               // starts once the read side is done (d_ok) - TT07 raised d_we
+               // while a read-modify-write was still waiting on a cache miss,
+               // and the first write went out with stale data
+               if (d_ok && cond[0] && (op_st_r || op_swap_r || op_swapi_r || op_sra_r || op_push_a_r ||
                    op_dcx_r || op_inx_r || op_push_ix_r || op_stxx_r || op_shl16_r | op_shr16_r))
                begin
                   d_we_r <= 1'b1;
@@ -1300,9 +1354,9 @@ module lisa_core
                            state <= 3'h0;
                         end
 
-                        // Write MSB of result only if int dividend
-                        if (div_ready && inst[1] == 0)
-                           d_we_r <= 1'b1;
+                        // the result stays in A and RA: no memory write (TT07's
+                        // high-byte store never landed and the one-word forms
+                        // wrote A to a stray address)
                      end
                   end
                end
@@ -1371,6 +1425,8 @@ module lisa_core
                cond[1] <= 1'b1;
                cond[0] <= ra_cond;     // Pop condition code from ra
             end
+            else if (cond[0] && decode_state && ret_isr_r)
+               cond <= 2'h3;           // an interrupt is only taken with cond == 11
             else if (exec_state & cond[0] & (op_ldx_r | op_lddiv_r | (op_any_div & inst[0] == 1'b0)))
                cond[0] <= 1'b0;
             else if ((exec_state & (~(op_sra_r | op_lra_r | op_push_ix_r | op_pop_ix_r) | ldx_stage_two |
@@ -1593,7 +1649,10 @@ module lisa_core
          if (d_ok)
          begin
             // Load the accumulator (test for ret # opcode since RET doesn't go to exec_state)
-            if ((exec_state || op_reti_r) && cond[0] && acc_load_val[8])
+            // ret #imm8 loads A in the decode state (it never reaches exec);
+            // TT07 kept loading through the fetch of the return, when inst
+            // was already the instruction at the return address
+            if ((exec_state || (op_reti_r && decode_state)) && cond[0] && acc_load_val[8])
                acc <= acc_load_val[7:0];
             else if (stg2_state && div_ready)
                acc <= acc_load_val[7:0];
@@ -1614,11 +1673,13 @@ module lisa_core
                acc_delayed_val <= acc_delayed_val_val;
          end
 
-         // Implement amode register
+         // Implement amode register (rets restores the mode interrupted)
          if (reset)
             amode <= 3'h1;
-         else if (exec_state && op_amode_r)
+         else if (exec_state && cond[0] && op_amode_r)
             amode <= inst[2:0];
+         else if (decode_state && cond[0] && ret_isr_r)
+            amode <= amode_isr;
          else if (stop && dbg_we && dbg_a == 8'h1 && dbg_di[15])
             amode <= dbg_di[14:12];
       end
@@ -1627,7 +1688,8 @@ module lisa_core
    // Logic for signed_inversion for signed compare
    // =================================================
    wire signed_inv_val;
-   assign signed_inv_val = op_restc ?  signed_inv_save :  
+   assign signed_inv_val = (decode_state & ret_isr_r) ? signed_inv_live_isr :
+                           op_restc ?  signed_inv_save :  
                            signed_valid ? (acc[7] ^ (inst[`PWORD_SIZE-1 -: 6] == 6'b101001 ?
                                           inst[7] : d_i[7])) : 1'b0;
 
@@ -1687,7 +1749,10 @@ module lisa_core
             end
          end
          else if (decode_state && cond[0] && ret_isr_r)
+         begin
             signed_inv_save <= signed_inv_isr;
+            cflag_save <= cflag_save_isr;
+         end
       end
    end
 
@@ -1696,7 +1761,6 @@ module lisa_core
    Instantiate the HW 16-bit divider
    ==========================================================================
    */
-   wire cflag_load;
    assign cflag_load = (c_load && exec_state && cond[0] && d_ok) ||
                        (decode_state && cond[0] && ret_isr_r);
 
@@ -1852,6 +1916,9 @@ module lisa_core
          .cond       ( cond        ),
          .zflag      ( zflag       ),
          .cflag      ( cflag       ),
+         .amode      ( amode       ),
+         .fetch      ( fetch_state ),
+         .brk_inst   ( decode_state & cond[0] & op_brk_r ),
          .stop       ( stop        ),
          .cont_q     ( cont_q      ),
          .f0         ( f0          ),

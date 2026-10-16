@@ -337,4 +337,43 @@ module tb_core;
       if (uart_rx_rd && uart_rx_avail)
          uart_rx_avail <= 1'b0;
 
+   // +TRACEPC=<hex>: whenever that instruction executes with C set, print
+   // where the last interrupt landed (a non-intrusive look at a timing race)
+   integer        trace_pc;
+   integer        trace_win;
+   reg [14:0]     irq_pc;
+   reg [15:0]     irq_inst;
+   reg [1:0]      irq_cond;
+   reg            irq_c, irq_csave, irq_inv;
+   reg [2:0]      irq_amode;
+   initial
+   begin
+      if (!$value$plusargs("TRACEPC=%h", trace_pc))
+         trace_pc = -1;
+      if (!$value$plusargs("TRACEWIN=%h", trace_win))
+         trace_win = -1;
+   end
+   always @(posedge clk)
+   begin
+      if (i_lisa_core.irq_take)
+      begin
+         irq_pc    <= i_lisa_core.pc;
+         irq_inst  <= i_lisa_core.inst;
+         irq_cond  <= i_lisa_core.cond;
+         irq_c     <= i_lisa_core.cflag;
+         irq_csave <= i_lisa_core.cflag_save;
+         irq_inv   <= i_lisa_core.signed_inversion;
+         irq_amode <= i_lisa_core.amode;
+      end
+      if (i_lisa_core.exec_state && i_lisa_core.d_ok && i_lisa_core.pc == trace_pc[14:0] && i_lisa_core.cflag)
+         $display("TRACE pc %h: C=1, A %h sp %h; the interrupt landed on pc %h inst %h cond %b C %b Csave %b inv %b amode %h",
+                  i_lisa_core.pc, i_lisa_core.acc, i_lisa_core.sp, irq_pc, irq_inst, irq_cond, irq_c, irq_csave, irq_inv, irq_amode);
+      // +TRACEWIN=<hex>: every data access of the instructions from that PC on (16 of them)
+      if (trace_win >= 0 && i_lisa_core.pc >= trace_win[14:0] && i_lisa_core.pc < trace_win[14:0] + 16 && d_we)
+         $display("  W pc %h sp %h  [%h] <= %h", i_lisa_core.pc, i_lisa_core.sp, d_addr, d_o);
+      if (trace_win >= 0 && i_lisa_core.pc >= trace_win[14:0] && i_lisa_core.pc < trace_win[14:0] + 16 &&
+          i_lisa_core.exec_state && i_lisa_core.d_ok && i_lisa_core.d_valid)
+         $display("  R pc %h sp %h  [%h] -> %h  (inst %h)", i_lisa_core.pc, i_lisa_core.sp, d_addr, d_i, i_lisa_core.inst);
+   end
+
 endmodule

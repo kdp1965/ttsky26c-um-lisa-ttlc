@@ -31,6 +31,9 @@ Kenneth D. Pettit
 */
 
 module lisa_rx8n
+  #(
+   parameter DEPTH_LOG2 = 3                     // the receive FIFO: 8 bytes
+   )
   (
    // Timing and reset inputs
    input  wire                clk,              // System clock 
@@ -38,10 +41,13 @@ module lisa_rx8n
 
    input  wire                baud_ref,         // Baud Rate reference
    input  wire                rxd,              // RX data
-   input  wire                rd,               // Read signal
+   input  wire                rd,               // Read signal: its rising edge takes the byte
 
-   output wire [7:0]          d,                // Output parallel data
-   output wire                data_avail        // '1' when data available
+   output wire [7:0]          d,                // Output parallel data (the oldest byte)
+   output wire                data_avail,       // '1' when data available
+   output reg                 rx_strobe,        // one clock per byte received
+   output wire [7:0]          rx_byte,          // ... that byte
+   output reg                 overrun           // a byte arrived with the FIFO full (sticky until read empty)
    );
 
    // ================================================
@@ -49,37 +55,71 @@ module lisa_rx8n
    // ================================================
    reg  [7:0]        bit_count;                 // Count 0 to 160
    reg  [7:0]        shift;                     // Shift register
-   reg  [7:0]        dbuf;                      // Data buffer
-   reg               buffer_full;               // True when data in buffer
 
    reg               s_last_rd;                 // Previous read signal
    reg               s_rxd;                     // 
-
-   reg               s_rd_idx;
-   reg               s_wr_idx;
    reg               s_baud_edge;
 
+   // The receive FIFO (TT07 held one byte: a second one arriving before the
+   // program read the first was lost - the console of a program fetching
+   // from a plain SPI flash lost every other character of a burst)
+   reg  [7:0]        fifo[0:(1 << DEPTH_LOG2) - 1];
+   reg  [DEPTH_LOG2:0] wr_ptr;
+   reg  [DEPTH_LOG2:0] rd_ptr;
+   wire              empty = wr_ptr == rd_ptr;
+   wire              full  = (wr_ptr[DEPTH_LOG2-1:0] == rd_ptr[DEPTH_LOG2-1:0]) &&
+                             (wr_ptr[DEPTH_LOG2] != rd_ptr[DEPTH_LOG2]);
+   wire              push;
+   reg  [7:0]        rx_byte_r;                 // the byte, taken at the stop bit's middle
+   assign push = rx_strobe;
 
-   assign d = dbuf;
-   assign data_avail = buffer_full & (s_rd_idx ^ s_wr_idx);
+   assign d = fifo[rd_ptr[DEPTH_LOG2-1:0]];
+   assign data_avail = !empty;
+   assign rx_byte = rx_byte_r;
 
    // ================================================
-   // Detect a read data condition
+   // The read side: the rising edge of rd pops a byte
    // ================================================
    always @(posedge clk)
    begin
       if (~rst_n)
       begin
          s_last_rd <= 1'b0;
-         s_rd_idx <= 1'b0;
+         rd_ptr <= {(DEPTH_LOG2+1){1'b0}};
       end
       else
       begin
-         // Detect rd on rising edge of read clock
-         if (rd & ~s_last_rd && buffer_full)
-            s_rd_idx <= ~s_rd_idx;
+         if (rd & ~s_last_rd && !empty)
+            rd_ptr <= rd_ptr + 1'b1;
 
          s_last_rd <= rd;
+      end
+   end
+
+   // ================================================
+   // The write side
+   // ================================================
+   always @(posedge clk)
+   begin
+      if (~rst_n)
+      begin
+         wr_ptr <= {(DEPTH_LOG2+1){1'b0}};
+         overrun <= 1'b0;
+      end
+      else
+      begin
+         if (push)
+         begin
+            if (!full)
+            begin
+               fifo[wr_ptr[DEPTH_LOG2-1:0]] <= rx_byte_r;
+               wr_ptr <= wr_ptr + 1'b1;
+            end
+            else
+               overrun <= 1'b1;
+         end
+         else if (empty)
+            overrun <= 1'b0;
       end
    end
 
@@ -90,25 +130,18 @@ module lisa_rx8n
    begin
       if (~rst_n)
       begin
-         buffer_full <= 1'b0;
-         s_wr_idx <= 1'b0;
          bit_count <= 8'd160;
          shift <= 8'h0;
-         dbuf <= 8'h0;
          s_rxd <= 1'b1;
          s_baud_edge <= 1'b0;
+         rx_strobe <= 1'b0;
+         rx_byte_r <= 8'h0;
       end
       else
       begin
          // Create baud_ref edge detect
          s_baud_edge <= baud_ref;
-
-         // If we have data in the FIFO and none in the output buffer,
-         // then copy FIFO to output buffer.
-         if (s_rd_idx == s_wr_idx)
-         begin
-            buffer_full <= 1'b0;
-         end
+         rx_strobe <= 1'b0;
 
          // Detect rising edge of baud_ref
          if (baud_ref & !s_baud_edge)
@@ -142,10 +175,8 @@ module lisa_rx8n
                   // buffer and reset the counter.
                   if (bit_count[7:4] == 4'h9)
                   begin
-                     buffer_full <= 1'b1;       // Indicate data available
-                     dbuf <= shift;             // Save Data
-                     if (!buffer_full || (buffer_full && rd))
-                        s_wr_idx <= ~s_wr_idx;     // Update write index
+                     rx_strobe <= 1'b1;         // the byte: into the FIFO
+                     rx_byte_r <= shift;        // (shift moves on in this clock)
                      bit_count <= 160;
                   end
                   else

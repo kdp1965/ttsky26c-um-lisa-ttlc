@@ -77,7 +77,10 @@ module lisa_uart
        .rxd        ( s_rx_pipe[1]    ),   // Connect the rx data
        .rd         ( rx_rd           ),   // Connect the rd signal
        .data_avail ( rx_data_avail   ),   // Connect data avail signal
-       .d          ( rx_d            )    // Connect the data
+       .d          ( rx_d            ),   // Connect the data
+       .rx_strobe  (                 ),
+       .rx_byte    (                 ),
+       .overrun    (                 )
    );
 
    // ===================================================================

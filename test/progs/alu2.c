@@ -38,8 +38,8 @@ static unsigned int cmp_sgt(unsigned char a, unsigned char b) __sdcccall(0)
 
 #define CPI_K(name, k)                                                     \
 static unsigned int name(unsigned char a) __sdcccall(0)                   \
-{ __asm__("ldax 5(sp)\n\tcpi #" k "\n\tifte slt\n\tldi.p #1\n\tldi.p #0\n\t" \
-          "stax 3(sp)\n\tldac c\n\tstax 4(sp)"); }
+{ __asm__("ldax 5(sp)\n\tcpi #" k "\n\tldac c\n\tstax 4(sp)\n\tldax 5(sp)\n\tcpi #" k \
+          "\n\tifte slt\n\tldi.p #1\n\tldi.p #0\n\tstax 3(sp)"); }
 CPI_K(cpi_00, "0x00")
 CPI_K(cpi_01, "0x01")
 CPI_K(cpi_7f, "0x7f")

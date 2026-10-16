@@ -210,10 +210,13 @@ module data_cache
    assign qspi_xfer_len   = 4'h7;
    assign qspi_wstrb      = { save_active, save_active };
    assign qspi_addr[15]   = 1'b0;
-   assign qspi_addr[14]   = cache_map_sel == 2'h3 ? cache_map[1] : 1'b0;
-   assign qspi_addr[13]   = cache_map_sel == 2'h2 ? cache_map[1] : cl_map_addr[7];
-   assign qspi_addr[12]   = cache_map_sel == 2'h1 ? cache_map[1] : cl_map_addr[6];
-   assign qspi_addr[11]   = cache_map_sel == 2'h0 ? cache_map[1] : cl_map_addr[5];
+   // the line's upper address bit is the map bit (cache_map[2] = the
+   // d_addr bit cache_map_sel chose); TT07 took cache_map[1] (= d_addr[5])
+   // here, so X and X ^ 0x4000 shared one RAM location
+   assign qspi_addr[14]   = cache_map_sel == 2'h3 ? cache_map[2] : 1'b0;
+   assign qspi_addr[13]   = cache_map_sel == 2'h2 ? cache_map[2] : cl_map_addr[7];
+   assign qspi_addr[12]   = cache_map_sel == 2'h1 ? cache_map[2] : cl_map_addr[6];
+   assign qspi_addr[11]   = cache_map_sel == 2'h0 ? cache_map[2] : cl_map_addr[5];
    assign qspi_addr[10:6] = cl_map_addr[4:0];
    assign qspi_addr[5:4]  = cache_map[1:0];
    assign qspi_addr[3:1]  = fsm_a;

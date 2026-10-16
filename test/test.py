@@ -40,10 +40,29 @@ async def test_bringup(dut):
     """progs/hello.hex prints its banner from the flash and echoes a character"""
     lisa = await start(dut)
     await lisa.setup(cache=False, quad=True)
-    text = await lisa.run(timeout=400 * CHAR_CYCLES, stop_at=('ready',))
+    text = await lisa.run(timeout=400 * CHAR_CYCLES, stop_at=('ready\n',))
     assert 'hello from sdcc' in text, text
     await lisa.tx(ord('?'))
     assert (await lisa.rx(100 * CHAR_CYCLES)) == ord('?'), 'no echo'
+
+
+@cocotb.test(skip=plusarg('DEFAULT') is None)
+async def test_uart_burst(dut):
+    """a burst of characters to hello's echo loop: the receive FIFO keeps them
+    (TT07 held one byte and lost every other character of a burst)"""
+    lisa = await start(dut)
+    await lisa.setup(cache=False, quad=True)
+    await lisa.run(timeout=400 * CHAR_CYCLES, stop_at=('ready\n',))
+    burst = 'burst-of-8'
+    for c in burst:
+        await lisa.tx(ord(c))
+    got = ''
+    for _ in burst:
+        v = await lisa.rx(200 * CHAR_CYCLES)
+        if v is None:
+            break
+        got += chr(v)
+    assert got == burst, 'echoed %r' % got
 
 
 @cocotb.test(skip=plusarg('DEFAULT') is not None)

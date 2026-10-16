@@ -134,7 +134,10 @@ module tb
       .rxd        ( rxd          ),
       .rd         ( rx_rd        ),
       .d          ( rx_d         ),
-      .data_avail ( rx_avail     )
+      .data_avail ( rx_avail     ),
+       .rx_strobe  (              ),
+       .rx_byte    (              ),
+       .overrun    (              )
    );
 
    debug_brg i_brg

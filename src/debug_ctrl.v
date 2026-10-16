@@ -173,6 +173,8 @@ module debug_ctrl
    wire           s_baud_ref;       // Transmit data out
    wire           s_baud_set;       // Strobe to set baud rate
    wire           s_rx_data_avail;  // RX data avail detect
+   wire           s_rx_strobe;      // a byte received (the FIFO may hold more)
+   wire   [7:0]   s_rx_byte;        // ... that byte
    reg            s_rx_rd;          // RX rd signal
    wire   [7:0]   s_rx_d;          
    reg            s_tx_wr;          // TX write signal
@@ -322,8 +324,9 @@ module debug_ctrl
                if (lisa_rx_rd)
                   s_lisa_rx_avail <= 1'b0;
 
-               // Test for rx data
-               if (s_rx_data_avail)
+               // Test for rx data - for LISA only once it has taken the
+               // previous byte (the receive FIFO queues the rest)
+               if (s_rx_data_avail && !(s_lisa_has_uart && s_lisa_rx_avail))
                begin
                   // Read data from the UART
                   s_debug_cmd   <= s_rx_d;
@@ -350,11 +353,10 @@ module debug_ctrl
             // =======================================================
             st_rx_read_delay:
             begin
-               // Read any byte that arrives during this state
+               // Take the byte out of the receive FIFO: rd's rising edge
+               // pops it (the next one may already be there)
                s_rx_rd <= 1'b1;
-
-               // Wait for rx_data_avail to go low
-               if (!s_rx_data_avail)
+               if (s_rx_rd)
                begin
                   s_rx_rd <= 1'b0;
                   s_state <= st_debug_hold;
@@ -522,16 +524,15 @@ module debug_ctrl
                   s_lisa_rx_avail <= 1'b0;
             end
 
-            // Flush RX until CR detected
+            // Flush RX until CR detected: a pop (rd rising) every other clock
             st_flush:
             begin
                if (s_rx_data_avail)
                begin
-                  // Read the next byte
-                  s_rx_rd <= 1'b1;
+                  s_rx_rd <= ~s_rx_rd;
 
-                  // Test for CR or LF
-                  if (s_rx_d == ASCII_CR || s_rx_d == ASCII_LF)
+                  // Test for CR or LF (the byte being popped)
+                  if (!s_rx_rd && (s_rx_d == ASCII_CR || s_rx_d == ASCII_LF))
                      s_state <= st_idle;
                end
                else
@@ -662,7 +663,10 @@ module debug_ctrl
        .rxd        ( s_uart_rx       ),   // Connect the rx data
        .rd         ( s_rx_rd         ),   // Connect the rd signal
        .data_avail ( s_rx_data_avail ),   // Connect data avail signal
-       .d          ( s_rx_d          )    // Connect the data
+       .d          ( s_rx_d          ),   // Connect the data
+       .rx_strobe  ( s_rx_strobe     ),   // a byte received
+       .rx_byte    ( s_rx_byte       ),
+       .overrun    (                 )
    );
 
    // ===================================================================
@@ -718,22 +722,15 @@ module debug_ctrl
          else if (s_guard_count == 24'h1 && s_plus_count == 2'h3)
             s_lisa_has_uart <= 1'b0;
 
-         // Test for any received data on RX
-         if (s_last_rx_avail)
+         // Test for any received data on RX (the arrival, not the FIFO's
+         // level: bytes may queue while LISA is slow to take them)
+         if (s_rx_strobe)
+         begin
             // Re-load the guard count
             s_guard_count <= {plus_guard_time, 20'hFFFFF};
-         else
-         begin
-            // Test if guard count needs to be decremented
-            if (s_guard_count != 0)
-               // Decrement the guard count
-               s_guard_count <= s_guard_count - 24'h1;
 
-            // Test for new data arrival
-            if (s_rx_data_avail && !s_last_rx_avail)
-            begin
-               // Test for '+' character
-               if (s_rx_d == ASCII_PLUS)
+            // Test for '+' character
+            if (s_rx_byte == ASCII_PLUS)
                begin
                   // Test for receipt of '+'
                   if (s_guard_count == 24'h0 || s_plus_count != 0)
@@ -742,19 +739,18 @@ module debug_ctrl
                      s_plus_count <= s_plus_count + 2'h1;
                   end
                end
-               else
-               begin
-                  // Reset the plus count
-                  s_plus_count <= 2'h0;
-               end
-
-               // Test for 'l' command while in debugger mode
-               if (!s_lisa_has_uart && s_rx_d == ASCII_l &&
-                     s_state == st_parse_cmd)
-               begin
-                  s_lisa_has_uart <= 1'b1;
-               end
+            else
+            begin
+               // Reset the plus count
+               s_plus_count <= 2'h0;
             end
+         end
+         else
+         begin
+            // Test if guard count needs to be decremented
+            if (s_guard_count != 0)
+               // Decrement the guard count
+               s_guard_count <= s_guard_count - 24'h1;
          end
 
          s_last_rx_avail <= s_rx_data_avail;

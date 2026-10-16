@@ -25,173 +25,115 @@ module fadd
     input wire                         isDN_op2_i,
     output wire [16-1:0] result // Outputs in the format of IEEE-`EXP_W-154 Representation.
 );
-
-   wire isINF;
-   wire isNAN;
-   wire output_sign;
-   wire operation_sub;
-
-   reg  [16-1:0]     operand_a, operand_b;
-   wire [2+`M_W+1:0] significand_a, significand_b;
-   wire [`EXP_W-1:0] exponent_diff;
-
-   wire [2+`M_W+1:0] significand_b_add;
-   wire [2+`M_W+1:0] significand_b_add_twos;
-
-   wire [2+`M_W+1:0] significand_add;
-   wire [2+`M_W+1:0] significand_add_temp;
-   reg  [3:0]        leftShift;
-   reg               a_isZ, b_isZ;
-   reg               a_isINF, b_isINF;
-   reg               a_isSNAN, b_isSNAN;
-   reg               a_isQNAN, b_isQNAN;
-   reg               a_isSubnorm, b_isSubnorm;
-   reg               a_assumedOne, b_assumedOne;
-   reg  [`EXP_W:0]   a_e;
-   reg  [`EXP_W:0]   b_e;
-   reg  [`EXP_W:0]   e_res;
-   reg  [2+`M_W+1:0] f_res;
+   // The bfloat16 adder, rewritten for revision 2 (the TT07 one built the
+   // carry-out case one bit off, rounded up on any guard bit and let the
+   // rounding carry wrap the fraction).  Significands carry three guard
+   // bits: [11] carry, [10] hidden, [9:3] fraction, [2] G, [1] R, [0] sticky.
+   // The result is rounded to nearest even, or toward zero with amode[2].
    /* verilator lint_off UNUSEDSIGNAL */
-   reg  [2+`M_W+1:0] f_rounded;
+   wire              a_isZ, b_isZ, a_isINF, b_isINF, a_isNAN, b_isNAN, a_isSubnorm, b_isSubnorm;
    /* verilator lint_on UNUSEDSIGNAL */
+   wire              a_assumedOne, b_assumedOne;
+   wire [`EXP_W:0]   a_e, b_e;
+   wire [15:0]       operand_a, operand_b;
    wire              a_GT_b;
+   wire              operation_sub;
 
-   assign a_GT_b = (a_in[16-2:0] > b_in[16-2:0]);
-
-   always @*
-   begin
-      //for operations always operand_a must not be less than b_in
-      if (a_GT_b)
-      begin
-         {operand_a,operand_b}      = {a_in,b_in};
-         {a_isSubnorm, b_isSubnorm} = {isDN_op1_i, isDN_op2_i};
-         {a_isZ, b_isZ}             = {isZ_op1_i, isZ_op2_i};
-         {a_isINF, b_isINF}         = {isInf_op1_i, isInf_op2_i};
-         {a_isSNAN, b_isSNAN}       = {isSNAN_op1_i, isSNAN_op2_i};
-         {a_isQNAN, b_isQNAN}       = {isQNAN_op1_i, isQNAN_op2_i};
-         {a_e, b_e}                 = {extE_op1_i, extE_op2_i};
-      end
-      else
-      begin
-         {operand_a,operand_b}      = {b_in,a_in};
-         {a_isSubnorm, b_isSubnorm} = {isDN_op2_i, isDN_op1_i};
-         {a_isZ, b_isZ}             = {isZ_op2_i, isZ_op1_i};
-         {a_isINF, b_isINF}         = {isInf_op2_i, isInf_op1_i};
-         {a_isSNAN, b_isSNAN}       = {isSNAN_op2_i, isSNAN_op1_i};
-         {a_isQNAN, b_isQNAN}       = {isQNAN_op2_i, isQNAN_op1_i};
-         {a_e, b_e}                 = {extE_op2_i, extE_op1_i};
-      end
-   end
-
-
-//   assign a_isSubnorm  = ~(|operand_a[14 -: 8]) & (|operand_a[6:0]);   // E==0x0   && f!=0x0
-//   assign a_isZ        = ~(|operand_a[14:0]);
-//   assign a_isINF      = operand_a[14:0] == 15'b111111110000000;
-//   assign a_isSNAN     = operand_a[14:0] == 15'b111111110111111;
-//   assign a_isQNAN     = operand_a[14:0] == 15'b111111111000000;
-//   assign b_isSubnorm  = ~(|operand_b[14 -: 8]) & (|operand_b[6:0]);   // E==0x0   && f!=0x0
-//   assign b_isZ        = ~(|operand_b[14:0]);
-//   assign b_isINF      = operand_b[14:0] == 15'b111111110000000;
-//   assign b_isSNAN     = operand_b[14:0] == 15'b111111110111111;
-//   assign b_isQNAN     = operand_b[14:0] == 15'b111111111000000;
+   assign a_GT_b = (a_in[14:0] > b_in[14:0]);          // operand_a: the larger magnitude
+   assign {operand_a, operand_b} = a_GT_b ? {a_in, b_in} : {b_in, a_in};
+   assign {a_isSubnorm, b_isSubnorm} = a_GT_b ? {isDN_op1_i, isDN_op2_i} : {isDN_op2_i, isDN_op1_i};
+   assign {a_isZ, b_isZ}     = a_GT_b ? {isZ_op1_i, isZ_op2_i} : {isZ_op2_i, isZ_op1_i};
+   assign {a_isINF, b_isINF} = a_GT_b ? {isInf_op1_i, isInf_op2_i} : {isInf_op2_i, isInf_op1_i};
+   assign {a_isNAN, b_isNAN} = a_GT_b ? {isSNAN_op1_i | isQNAN_op1_i, isSNAN_op2_i | isQNAN_op2_i} :
+                                        {isSNAN_op2_i | isQNAN_op2_i, isSNAN_op1_i | isQNAN_op1_i};
+   assign {a_e, b_e}         = a_GT_b ? {extE_op1_i, extE_op2_i} : {extE_op2_i, extE_op1_i};
    assign a_assumedOne = ~a_isZ & ~a_isSubnorm;
    assign b_assumedOne = ~b_isZ & ~b_isSubnorm;
-//   assign a_e          = {1'b0, operand_a[14:`M_W+1], (operand_a[`M_W] | a_isSubnorm)};
-//   assign b_e          = {1'b0, operand_b[14:`M_W+1], (operand_b[`M_W] | b_isSubnorm)};
+   assign operation_sub = operand_a[15] != operand_b[15];
 
-   //Exception flag sets 1 if either one of the exponent is 255.
-   assign isINF = a_isINF | b_isINF;
-   assign isNAN = a_isSNAN | b_isSNAN | a_isQNAN | b_isQNAN;
+   // align b to a: shift right by the exponent difference, the bits shifted
+   // out folded into the sticky bit
+   wire [11:0]       sig_a = {1'b0, a_assumedOne, operand_a[6:0], 3'b0};
+   wire [11:0]       sig_b = {1'b0, b_assumedOne, operand_b[6:0], 3'b0};
+   wire [`EXP_W:0]   ediff = a_e - b_e;
+   wire              far   = ediff > 9'd11;
+   wire [11:0]       sig_b_sh = far ? 12'h0 : (sig_b >> ediff[3:0]);
+   wire [11:0]       lost_mask = far ? 12'hfff : ~(12'hfff << ediff[3:0]);
+   wire              sticky = |(sig_b & lost_mask);
+   wire [11:0]       sig_b_al = {sig_b_sh[11:1], sig_b_sh[0] | sticky};
+   wire [11:0]       sum = operation_sub ? (sig_a - sig_b_al) : (sig_a + sig_b_al);
 
-   assign operation_sub =  operand_a[16-1] != operand_b[16-1];
-
-   //Assigining significand values according to Hidden Bit.
-   assign significand_a = {1'b0,a_assumedOne,operand_a[`M_W-1:0], 2'b0}; // expand the mantissa by 1 bit before addition since its always implied
-   assign significand_b = {1'b0,b_assumedOne,operand_b[`M_W-1:0], 2'b0}; // same as above
-
-   //Evaluating Exponent Difference
-   //assign exponent_diff = operand_a[16-2:`M_W] - operand_b[16-2:`M_W];
-   assign exponent_diff = a_e - b_e;
-
-   //Shifting significand_b to the right according to exponent_diff. Exapmle: if we have 1.0101 >> 2 = 0.0101 then exponent_diff = 2 and significand_b_add = significand_b >> exponent_diff
-   assign significand_b_add = significand_b >> exponent_diff;
-   assign significand_b_add_twos = operation_sub ? ~significand_b_add + 1 : significand_b_add;
-
-   //------------------------------------------------ADD BLOCK------------------------------------------//
-   assign significand_add_temp = significand_a + significand_b_add_twos;
-   assign significand_add = operation_sub ? {1'b0, significand_add_temp[2+`M_W:0]} : significand_add_temp;
-
+   // normalize: a carry out shifts right, leading zeros shift left (into the
+   // subnormal range when the exponent runs out)
+   reg  [3:0]        lz;
    always @*
    begin
-		casez(significand_add[2 +: 9])
-			9'b1????????: leftShift = 'd0;
-			9'b01???????: leftShift = 'd0;
-			9'b001??????: leftShift = 'd1;
-			9'b0001?????: leftShift = 'd2;
-			9'b00001????: leftShift = 'd3;
-			9'b000001???: leftShift = 'd4;
-			9'b0000001??: leftShift = 'd5;
-			9'b00000001?: leftShift = 'd6;
-			9'b000000001: leftShift = 'd7;
-			9'b000000000: leftShift = 'd8;
-         default:      leftShift = 'd0;
-		endcase
+      casez (sum[10:0])
+         11'b1??????????: lz = 4'd0;
+         11'b01?????????: lz = 4'd1;
+         11'b001????????: lz = 4'd2;
+         11'b0001???????: lz = 4'd3;
+         11'b00001??????: lz = 4'd4;
+         11'b000001?????: lz = 4'd5;
+         11'b0000001????: lz = 4'd6;
+         11'b00000001???: lz = 4'd7;
+         11'b000000001??: lz = 4'd8;
+         11'b0000000001?: lz = 4'd9;
+         11'b00000000001: lz = 4'd10;
+         default:         lz = 4'd11;
+      endcase
    end
 
+   reg  [`EXP_W:0]   e_res;
+   reg  [11:0]       f_res;
    always @*
    begin
-      //Taking care of the resulting mantissa. 
-      //If there is a carry, then the result is normalized by shifting the significand right by one bit(because its implied) and incrementing the exponent by one.
-      if (significand_add[1+`M_W+2])
+      if (sum[11])
       begin
-         // Check for overflow
-         if (a_e + 1 == 255)
-         begin
-            // Overflow ocurred
-            e_res = 9'hFF;
-            f_res = 'h0;
-         end
-         else
-         begin
-            // Add one to exponent and shift significand right one
-            e_res = a_e + 1;
-            f_res = {3'b0, significand_add[1+`M_W+1:1+1]};
-         end
+         e_res = a_e + 9'd1;
+         f_res = {1'b0, sum[11:2], sum[1] | sum[0]};
       end
-
-      // Check if no shift needed ... already normalized
-      else if (significand_add[2+`M_W] == 1)
+      else if (sum[10])
       begin
          e_res = a_e;
-         f_res = {2'b0, significand_add[2+`M_W-1:2+0], |significand_add[1:0], 1'b0};
+         f_res = sum;
+      end
+      else if (sum == 12'h0)
+      begin
+         e_res = 9'h0;
+         f_res = 12'h0;
+      end
+      else if (a_e > {5'h0, lz})
+      begin
+         e_res = a_e - {5'h0, lz};
+         f_res = sum << lz;
       end
       else
       begin
-         // Check for zero
-         if (significand_add == '0)
-         begin
-            e_res = '0;
-            f_res = '0;
-         end
-
-         // Do post-normalization
-         else if (a_e > 9'(leftShift))
-         begin
-            e_res = a_e - 9'(leftShift);
-            f_res = significand_add << leftShift;
-         end
-         else
-         begin
-            e_res = 'h0;
-            f_res = significand_add << (a_e - 1);
-         end
+         // subnormal: the smallest exponent, the hidden bit not reached
+         e_res = 9'h0;
+         f_res = sum << (a_e - 9'd1);
       end
    end
 
-   assign output_sign = {e_res,f_res} == '0 ? 1'b0 : operand_a[15];// (a_GT_b ? a_in[15] : ~b_in[15]);
+   // round: nearest even on {G, R|S} against the fraction's LSB
+   wire              round_up = round_to_zero ? 1'b0 : (f_res[2] & (f_res[1] | f_res[0] | f_res[3]));
+   wire [8:0]        f_rounded = {1'b0, f_res[10:3]} + {8'h0, round_up};   // {carry, hidden, fraction}
+   wire [`EXP_W:0]   e_rounded = f_rounded[8] ? e_res + 9'd1 :
+                                 (e_res == 9'h0 && f_rounded[7]) ? 9'd1 : e_res;   // a subnormal rounded up to normal
+   wire [6:0]        frac_out  = f_rounded[8] ? 7'h0 : f_rounded[6:0];
+   wire              overflow  = e_rounded >= 9'd255;
 
-   assign f_rounded = (round_to_zero & output_sign) ? f_res : f_res + 2;
-   assign result = isINF ? 16'h7F80 : isNAN ? 16'h7fC0 : {output_sign,e_res[7:0],f_rounded[2+6:2+0]};
+   wire              zero_res = (e_rounded == 9'h0) && (frac_out == 7'h0);
+   wire              output_sign = zero_res ? (a_in[15] & b_in[15]) : operand_a[15];
+   wire              isNAN = a_isNAN | b_isNAN | (a_isINF & b_isINF & operation_sub);
+   wire              isINF = a_isINF | b_isINF;
+   wire              inf_sign = a_isINF ? operand_a[15] : operand_b[15];
+
+   assign result = isNAN    ? 16'h7fC0 :
+                   isINF    ? {inf_sign, 15'h7f80} :
+                   overflow ? {output_sign, 15'h7f80} :
+                              {output_sign, e_rounded[7:0], frac_out};
 
 endmodule
 
@@ -228,6 +170,7 @@ module fmul
     reg [`EXP_W:0] e_result0;
     /* verilator lint_on UNUSEDSIGNAL */
     reg overflow;
+    reg underflow;
     reg zero_check;
    wire              a_isZ, b_isZ;
    wire              a_isINF, b_isINF;
@@ -237,7 +180,7 @@ module fmul
    wire              a_assumedOne, b_assumedOne;
    wire [`EXP_W:0]   a_e;
    wire [`EXP_W:0]   b_e;
-   int               e_add;
+   reg signed [`EXP_W:0] e_add;
 
 `ifdef DONT_COMPILE
    assign a_isSubnorm  = ~(|a_in[14 -: 8]) & (|a_in[6:0]);   // E==0x0   && f!=0x0
@@ -304,9 +247,13 @@ module fmul
         //1. If either of the inputs is zero, then the result is zero and there is no overflow.
         //2. Underflow check: If the sum of the exponents is less than the minimum exponent, then the result is zero and there is no overflow. {2'b0,{(EXP_W-1){1'b1}}} is the minimum exponent(001111111 in case of 32bit float)
         //3. Overflow check: If the sum of the exponents is greater than the maximum exponent, then the result is infinity and there is overflow. EXP_MAX is the maximum exponent.
-        overflow = (zero_check || (a_e + b_e + {{`EXP_W{1'b0}}, mul_fix_out[`MULT_W-1]}) < {2'b0,{(`EXP_W-1){1'b1}}} || (a_e + b_e + {8'd0, mul_fix_out[`MULT_W-1]}) > `EXP_MAX);
+        // the biased result exponent is a_e + b_e + e_add - 127: below 1 it
+        // underflows to zero (TT07 made it infinity), above 254 it overflows
+        underflow = zero_check || a_isSubnorm || b_isSubnorm ||
+                    ({1'b0, a_e} + {1'b0, b_e} + {{(`EXP_W+1){e_add[`EXP_W]}}, e_add[`EXP_W:0]}) < 10'd128;
+        overflow  = !underflow && (({1'b0, a_e} + {1'b0, b_e} + {{(`EXP_W+1){e_add[`EXP_W]}}, e_add[`EXP_W:0]}) > 10'd381);
 
-        if (~zero_check) begin
+        if (~underflow) begin
             if (overflow) begin
                 e_result0 = {(`EXP_W+1){1'b1}};
             end else begin
@@ -328,7 +275,9 @@ module fmul
     assign overflow_mask = overflow ? 0 : {(`M_W){1'b1}};
 
     assign result = (a_isSNAN | b_isSNAN | a_isQNAN | b_isQNAN) ? 16'h7FC0 :
-                    (a_isINF  | b_isINF)                        ? 16'h7F80 :
+                    ((a_isINF | b_isINF) & (a_isZ | b_isZ))     ? 16'h7FC0 :     // inf * 0
+                    (a_isINF  | b_isINF)                        ? {sign, 15'h7F80} :
+                    underflow                                   ? {sign, 15'h0} :
                            {sign, e_result, overflow_mask & M_result};
 endmodule
 

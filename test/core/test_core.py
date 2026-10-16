@@ -310,3 +310,45 @@ async def test_halt_resume(dut):
     assert (await core.read_reg(REG_STATUS)) & 1 == 0
     await core.halt()
     await core.wait_halted(10_000)
+
+
+# --------------------------------------------------------- an interrupt trace
+@cocotb.test(skip=not (plusarg('PROGRAM') or '').startswith('irq3'))
+async def test_irq_trace(dut):
+    """irq3: a breakpoint on the handler's high-byte adc; at each halt the
+    carry it sees, and which instruction the interrupt had landed on"""
+    from cocotb.triggers import RisingEdge, First
+    core = Core(dut)
+    await core.start()
+    words = load_words(plusarg('FIRMWARE'))
+    adcs = [pc + 1 for pc in words if words.get(pc) == 0xf202 and words.get(pc + 1) == 0x9001]
+    dut._log.info('ldax 2(sp); adc #1 at %s' % ['0x%04x' % p for p in adcs])
+    c = dut.i_lisa_core
+    await core.core_reset()
+    await core.write_reg(REG_PC, 0)
+    await core.set_breakpoint(0, adcs[0])
+    await core.resume()
+    bad = []
+    entries = 0
+    for n in range(130):
+        # the next interrupt entry, then the halt at the adc
+        await First(RisingEdge(c.irq_take), RisingEdge(dut.dbg_halted))
+        if int(c.irq_take.value):
+            entry = (int(c.pc.value), int(c.inst.value), int(c.cond.value), int(c.cflag.value), int(c.cflag_save.value),
+                     int(c.signed_inversion.value), int(c.amode.value))
+            entries += 1
+            await RisingEdge(dut.dbg_halted)
+        r = await core.regs()
+        flags = await core.read_reg(REG_ACC)
+        cf = (flags >> 9) & 1
+        if cf:
+            bad.append((entry, r['acc'], flags))
+        await core.resume()
+        if entries > 120:
+            break
+    dut._log.info('%d entries, %d halts at the adc with C set' % (entries, len(bad)))
+    for b in bad[:12]:
+        e = b[0]
+        dut._log.info('  interrupted pc 0x%04x inst 0x%04x cond %d C %d Csave %d inv %d amode %d -> adc sees A 0x%02x flags 0x%04x' %
+                      (e + (b[1], b[2])))
+    assert not bad

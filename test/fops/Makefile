@@ -3,6 +3,10 @@
 # make SIM=icarus.  On this Mac cocotb's libraries are x86_64 builds.
 SIM ?= $(if $(shell which verilator),verilator,icarus)
 ifeq ($(SIM),verilator)
+# Verilator's own makefile runs python3 (its includer script) with cocotb's
+# PYTHONHOME in the environment: hand it cocotb's python as a command-line
+# variable of every sub-make
+export MAKEFLAGS += PYTHON3=$(shell cocotb-config --python-bin)
 EXTRA_ARGS += -Wno-fatal -Wno-lint -Wno-style --timing
 ifeq ($(shell uname),Darwin)
 ifeq ($(shell $(shell cocotb-config --python-bin) -c "import platform; print(platform.machine())"),x86_64)
@@ -21,3 +25,8 @@ TOPLEVEL = tb_fops
 COCOTB_TEST_MODULES = test_fops
 MODULE = test_fops
 include $(shell cocotb-config --makefiles)/Makefile.sim
+
+# a run every time (cocotb would otherwise consider an existing results file up to date)
+$(COCOTB_RESULTS_FILE): FORCE
+FORCE:
+.PHONY: FORCE

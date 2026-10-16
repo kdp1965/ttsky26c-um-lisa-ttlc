@@ -12,23 +12,23 @@ the list for this revision: what the silicon does, where it is in the RTL
 
 | #  | Issue | Where | Status |
 |----|-------|-------|--------|
-| 1  | Data cache aliases X and X ^ 0x4000: 16K of RAM reachable, not 32K | `data_cache8.v` 213 | open |
-| 2  | Read-modify-write (`inx`/`dcx`/`swap`/`swapi`/`shl16`/`shr16`) on a cache miss uses stale data | `data_cache8.v` 223, `lisa_core.v` 681-684 | open |
-| 3  | `swap n(sp)` addresses sp + n - 512 | `lisa_core.v` 709, 630 | open |
-| 4  | BF16 `fadd`/`fsub` wrong on a significand carry-out and on a rounding carry | `fops.v` 145-166, 193-194 | open |
-| 5  | `ret #imm8` loads A from the wrong word | `lisa_core.v` 757, 527 | open |
-| 6  | Interrupts: predicate and pending `ldx` literal lost; `amode`, `cflag_save`, live `signed_inversion` not shadowed; `ie` unreadable | `lisa_core.v` 1206-1226, 1424 | open |
-| 7  | ALU carry: `adc`/`sub`/`cmp` fold the carry into an 8-bit operand; `cpi` captures no signed inversion | `lisa_core.v` 643-652, 808-817 | open |
-| 8  | Divider: result high byte never stored, stray writes, RA and IX clobbered | `lisa_core.v` 622, 686, 736, 750 | open, decision needed |
-| 9  | A breakpoint halt right after a store drops the store and writes RAM[IX] | `lisa_dbg.v` 433-442, `lisa_core.v` 670, 714 | open |
-| 10 | The debugger's single step does nothing | `lisa_dbg.v` 441, core pre-decode | open |
-| 11 | Debugger RAM reads return RAM[IX] with the cache off | `data_cache8.v` 223, core `dbg_ready` | open |
-| 12 | TTLC input scan shifts 17 times (every input one position high, bit 15/31/47 lost) | `shift_reg_io.v` 126-160 | open |
+| 1  | Data cache aliases X and X ^ 0x4000: 16K of RAM reachable, not 32K | `data_cache8.v` 213 | fixed: cache14 |
+| 2  | Read-modify-write (`inx`/`dcx`/`swap`/`swapi`/`shl16`/`shr16`) on a cache miss uses stale data | `data_cache8.v` 223, `lisa_core.v` 681-684 | fixed: test_cachermw (write-first RAM32) |
+| 3  | `swap n(sp)` addresses sp + n - 512 | `lisa_core.v` 709, 630 | fixed: swap |
+| 4  | BF16 `fadd`/`fsub` wrong on a significand carry-out and on a rounding carry | `fops.v` 145-166, 193-194 | fixed: test/fops |
+| 5  | `ret #imm8` loads A from the wrong word | `lisa_core.v` 757, 527 | fixed: reti |
+| 6  | Interrupts: predicate and pending `ldx` literal lost; `amode`, `cflag_save`, live `signed_inversion` not shadowed; `ie` unreadable | `lisa_core.v` 1206-1226, 1424 | fixed: test_irqhaz, test_irq, test_irq2 |
+| 7  | ALU carry: `adc`/`sub`/`cmp` fold the carry into an 8-bit operand; `cpi` captures no signed inversion | `lisa_core.v` 643-652, 808-817 | fixed: alu2 |
+| 8  | Divider: result high byte never stored, stray writes, RA and IX clobbered | `lisa_core.v` 622, 686, 736, 750 | fixed: div16 |
+| 9  | A breakpoint halt right after a store drops the store and writes RAM[IX] | `lisa_dbg.v` 433-442, `lisa_core.v` 670, 714 | fixed: test_bp_after_store |
+| 10 | The debugger's single step does nothing | `lisa_dbg.v` 441, core pre-decode | fixed: test_single_step |
+| 11 | Debugger RAM reads return RAM[IX] with the cache off | `data_cache8.v` 223, core `dbg_ready` | fixed: test_debug_port |
+| 12 | TTLC input scan shifts 17 times (every input one position high, bit 15/31/47 lost) | `shift_reg_io.v` 126-160 | fixed in RTL; chain model test to do |
 | 13 | TTLC: latch pulse cannot load a 74HC166; step bit cannot work; breakpoints one late from the instruction cache | `shift_reg_io.v`, `mc14500b.v`, `ttlc_inst_cache.v` | open |
-| 14 | Console UART holds one received byte: characters lost at flash fetch speed | `lisa_uart.v` / `lisa_rx8n.v` | improvement |
-| 15 | Reading debug register 0xf advances PC | `lisa_dbg.v` | by design, document |
+| 14 | Console UART holds one received byte: characters lost at flash fetch speed | `lisa_uart.v` / `lisa_rx8n.v` | done: test_uart_burst |
+| 15 | Reading debug register 0xf advances PC | `lisa_dbg.v` | kept |
 
-Status: open / in progress / fixed (RTL) / verified (test named).
+Status: open / fixed (the test that shows it, in test/: a program of test/progs, a cocotb test of test/core or the fops bench).
 
 ## 1. Data cache bit 14
 

@@ -68,6 +68,7 @@ def add(a_bits, b_bits, mode='rne'):
 
 
 def mul(a_bits, b_bits, mode='rtz'):
+    """fmul truncates, and flushes subnormal operands and results to zero"""
     a, b = to_frac(a_bits), to_frac(b_bits)
     s = ((a_bits ^ b_bits) >> 15) & 1
     if a == 'nan' or b == 'nan':
@@ -76,7 +77,12 @@ def mul(a_bits, b_bits, mode='rtz'):
         if (isinstance(a, str) and b == 0) or (isinstance(b, str) and a == 0):
             return 'nan'
         return '-inf' if s else 'inf'
-    return from_frac(a * b, mode, s)
+    if ((a_bits >> 7) & 0xff) == 0 or ((b_bits >> 7) & 0xff) == 0:
+        return s << 15
+    p = a * b
+    if abs(p) < Fraction(1, 1 << 126):
+        return s << 15
+    return from_frac(p, mode, s)
 
 
 def fmt(v):

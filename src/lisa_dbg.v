@@ -78,6 +78,9 @@ module lisa_dbg
    input  wire [1:0]          cond,
    input  wire                zflag,
    input  wire                cflag,
+   input  wire [2:0]          amode,
+   input  wire                fetch,       // the core's fetch state: an instruction retired when it comes back
+   input  wire                brk_inst,    // a brk being decoded
 
    input  wire [15:0]         f0,
    input  wire [15:0]         f1,
@@ -87,7 +90,7 @@ module lisa_dbg
 
    // Signal to processor to stop execution
    output wire                stop,
-   output reg                 cont_q,
+   output wire                cont_q,
 
    // Data bus signals
    output wire [D_BITS-1:0]   d_addr,
@@ -109,6 +112,10 @@ module lisa_dbg
 
    reg               halted;
    wire              cont;
+   reg               cont_q_r;
+   reg               step_r;      // a single step: stop lifted until the instruction retires
+   reg               skip_r;      // a resume: the breakpoint at this PC ignored until it retires
+   reg               fetch_r;
    wire [PC_BITS:0]  brk_r[DBG_BRKPOINTS-1:0];
    wire [PC_BITS:0]  brk_r0;
    wire [PC_BITS:0]  brk_r1;
@@ -162,7 +169,10 @@ module lisa_dbg
       if (~rst_n)
       begin
          halted <= 1'b1;
-         cont_q <= 1'b0;
+         cont_q_r <= 1'b0;
+         step_r <= 1'b0;
+         skip_r <= 1'b0;
+         fetch_r <= 1'b1;
          delay  <= 2'h0;
          d_addr_r <= {(D_BITS+1){1'b0}};
          access_state <= 2'h0;
@@ -181,24 +191,43 @@ module lisa_dbg
       end
       else
       begin
-         // Status register write
+         fetch_r <= fetch;
+
+         // Status register write: bit 0 halt, bit 1 resume, bit 2 step
          if (dbg_we && dbg_a == 8'h0)
          begin
             // Write to halt register
             halted <= dbg_di[0];
 
+            // a resume runs the instruction at the PC even with a breakpoint
+            // on it; a step runs exactly one instruction and halts again
+            // (TT07's step lifted stop for one clock, which executed nothing)
+            if (dbg_di[1])
+               skip_r <= 1'b1;
+            if (dbg_di[2])
+               step_r <= 1'b1;
+
             // Test for resume or single_step
             if ((dbg_di[1] || dbg_di[2]) && cont)
-               cont_q <= 1'b1;
+               cont_q_r <= 1'b1;
          end
          else
          begin
             // Test for end of write cycle to drive cont_q low
             if (dbg_we == 1'b0)
-               cont_q <= 1'b0;
+               cont_q_r <= 1'b0;
 
-            // Test for halt from breakpoint
-            if (brk_halt)
+            // the instruction retired: back in the fetch state
+            if (fetch && !fetch_r)
+            begin
+               if (step_r)
+                  halted <= 1'b1;
+               step_r <= 1'b0;
+               skip_r <= 1'b0;
+            end
+
+            // Test for halt from breakpoint, or a brk instruction
+            if ((brk_halt && !skip_r && !step_r) || (brk_inst && !cont_q))
                halted <= 1'b1;
          end
 
@@ -438,8 +467,9 @@ module lisa_dbg
       end
    end
    
-   assign cont = dbg_we && dbg_a == 8'h0 && |dbg_di[2:1] && ~cont_q;
-   assign stop = (halted | brk_halt) && !cont;
+   assign cont   = dbg_we && dbg_a == 8'h0 && |dbg_di[2:1] && ~cont_q_r;
+   assign cont_q = cont_q_r | step_r | skip_r;            // a brk passes as a nop during these
+   assign stop   = !step_r && (halted | (brk_halt && !skip_r)) && !cont;
    assign d_addr   = d_addr_r[D_BITS-1:0];
    assign d_periph = d_addr_r[D_BITS];
 
@@ -453,7 +483,7 @@ module lisa_dbg
       begin
          case (dbg_a)
          0:    dbg_do = { d_bits, pc_bits, 7'h0, halted };
-         1:    dbg_do = { 4'h0,  cond, cflag, zflag, acc };
+         1:    dbg_do = { 1'b0, amode, cond, cflag, zflag, acc };
          2:    dbg_do = { {(16-PC_BITS){1'b0}}, pc };
          3:    dbg_do = { {(16-D_BITS){1'b0}},  sp };
          4:    dbg_do = { {(16-PC_BITS){1'b0}}, ra };
