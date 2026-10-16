@@ -62,23 +62,28 @@ module psram (
       ST_DUMMY: if (cycle_count == 19) state <= ST_DR;
     endcase
 
+  // a write: two nibbles make a byte, stored at the second one's clock (the
+  // original model also stored at the chip select's edges, which put the
+  // last byte on the next address as well)
+  reg nib = 1'b0;
   always @(posedge sck)
     case (state)
       ST_CMD:  cmd <= {cmd[6:0], dio[0]};
       ST_ADDR: addr <= {addr[20:0], dio};
-      ST_DW:   data <= {data[3:0], dio};
+      ST_DW:   begin
+                  if (!nib)
+                     data[7:4] <= dio;
+                  else begin
+                     RAM[addr] = {data[7:4], dio};
+                     addr = addr + 1;
+                  end
+                  nib <= ~nib;
+               end
     endcase
 
-  always @(posedge sck) cycle_count <= cycle_count + 1;
+  always @(negedge ce_n) nib <= 1'b0;
 
-  always @(negedge sck or ce_n)
-    if (state == ST_DW)
-      if (cycle_count >= 16)
-        if ((cycle_count - 16) % 2 == 0 || ce_n) begin
-          RAM[addr] = data;
-          //   $display("PSRAM: Write to %x, value: %x", addr, RAM[addr]);
-          addr = addr + 1;
-        end
+  always @(posedge sck) cycle_count <= cycle_count + 1;
 
   always @(posedge sck)
     if (state == ST_DUMMY || state == ST_DR)
