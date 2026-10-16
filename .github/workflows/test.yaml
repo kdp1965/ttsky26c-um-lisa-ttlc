@@ -27,7 +27,7 @@ jobs:
         run: |
           cd test
           make clean
-          make
+          make SIM=icarus
           # make will return success even if the tests fail, so check results.xml for failed tests
           python -m cocotb_tools.check_results results.xml
 

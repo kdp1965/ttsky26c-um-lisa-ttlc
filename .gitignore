@@ -14,3 +14,10 @@ test/__pycache__/
 test/results.xml
 test/gate_level_netlist.v
 test/output/
+# the testbenches' builds and results
+test/**/sim_build*/
+test/**/sb*/
+test/**/__pycache__/
+test/**/*.xml
+test/**/*.vcd
+test/**/*.fst

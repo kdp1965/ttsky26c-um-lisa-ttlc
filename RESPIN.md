@@ -273,13 +273,26 @@ for loading code). By design; keep, and keep it out of the debuggers' polls
    Commander serve both chips; the Commander's 17-sample TTLC emulation and
    the debuggers' safe-stop logic become unnecessary on rev 2 but stay.
 
-## Decisions for Ken
+## Decisions (Ken, 2026-10-15)
 
-* 8: the divider's register side effects (keep RA = result / IX = 0, or
-  restore them).
+* 8, the divider: whatever gives the most efficient code, with a compiler
+  option for the fixed core. So: no memory write of the result at all (the
+  high-byte store was broken and the stray write goes with it); the 16-bit
+  result stays in RA with its bit 15 in `ra_cond`, so `xchg ra` gives the
+  whole result in IX (`txau` then reads bits 15:8, no `andi #0x7f`) and
+  `stxx` stores it; IX is 0 afterwards as on TT07. `sdcc -mlisa` keeps the
+  TT07 sequences by default and gets an option (`--rev2`, name to be
+  settled) for the shorter ones.
+* 6, interrupts: shadow everything the handler would otherwise have to save
+  (amode, cflag_save, the live signed inversion, as `lisa_sim --fixed-irq`
+  already models) and expose `ie`.
+* The RAM: the RAM32 DFFRAM macro, as on TT07 (the local flow). To look at:
+  the macro's read path is 1088 `ebufn_2` tri-state buffers (the 32:1
+  column mux per output bit, ~13.6K um2) next to 1024 `dlxtp_1` latches
+  (~14K um2) in a 401.6 x 136 um = 54.6K um2 block that is a third decap
+  (825 `decap_12`); an AND-OR (mux2 tree) read path would be about half
+  the area of the tri-states, so a recompiled macro could come in around
+  40K um2. Not started.
+* 14: an 8-byte UART receive FIFO.
+* `amode` becomes readable.
 * 7: `add` stays carry-less (confirmed 2026-10-06).
-* The RAM: the 128-byte RAM32 DFFRAM macro through the local flow, or the RAM
-  synthesized in the standard flow (`src/RAM32.v`, ~1024 flops), or a larger
-  one; and whether the cache's 32K map changes with it.
-* 14: a UART receive FIFO.
-* Whether `amode` becomes readable (with 6, dynamic `amode` changes become safe).

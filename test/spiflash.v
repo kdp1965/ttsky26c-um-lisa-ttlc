@@ -91,37 +91,49 @@ module spiflash #(
   reg io2_dout = 0;
   reg io3_dout = 0;
 
-  assign #1 io0 = io0_oe ? io0_dout : 1'bz;
-  assign #1 io1 = io1_oe ? (io1_dout == 1'b1 ? 1'bz : 1'b0) : 1'bz;
-  assign #1 io2 = io2_oe ? io2_dout : 1'bz;
-  assign #1 io3 = io3_oe ? io3_dout : 1'bz;
+`ifdef VERILATOR
+  // no delays on the tristate drivers under Verilator (its tristate support does
+  // not take them); sampling 1 ns before and driving 1 ns after the edge does
+  // not matter at the simulated clock rates
+  `define SPIDLY
+`else
+  `define SPIDLY #1
+`endif
+  assign `SPIDLY io0 = io0_oe ? io0_dout : 1'bz;
+  assign `SPIDLY io1 = io1_oe ? (io1_dout == 1'b1 ? 1'bz : 1'b0) : 1'bz;
+  assign `SPIDLY io2 = io2_oe ? io2_dout : 1'bz;
+  assign `SPIDLY io3 = io3_oe ? io3_dout : 1'bz;
 
   wire io0_delayed;
   wire io1_delayed;
   wire io2_delayed;
   wire io3_delayed;
 
-  assign #1 io0_delayed = io0;
-  assign #1 io1_delayed = io1;
-  assign #1 io2_delayed = io2;
-  assign #1 io3_delayed = io3;
+  assign `SPIDLY io0_delayed = io0;
+  assign `SPIDLY io1_delayed = io1;
+  assign `SPIDLY io2_delayed = io2;
+  assign `SPIDLY io3_delayed = io3;
 
-  //localparam flash_size = 16*1024;
-  localparam flash_size = 512;
+  // 128 KB: the whole 32K-word instruction space
+  localparam flash_size = 128*1024;
 
   // 16 MB (128Mb) Flash
   //reg [7:0] memory[0:16*1024*1024-1];
   reg [7:0] memory[0:flash_size-1];
 
+  // The image: +FIRMWARE=<file> (readmemh format: @byteaddr then hex bytes),
+  // else the FILENAME parameter
+  reg [8*256-1:0] fname;
+  integer k;
   initial begin
-    $display("Memory 5 bytes = 0x%02x 0x%02x 0x%02x 0x%02x 0x%02x", memory[0],
-             memory[1], memory[2],  // 0x100000
-             memory[3], memory[4]);
-    $display("Reading %s", FILENAME);
-    $readmemh(FILENAME, memory);
-    $display("%s loaded into memory", FILENAME);
-    $display("Memory 5 bytes = 0x%02x 0x%02x 0x%02x 0x%02x 0x%02x", memory[0],
-             memory[1], memory[2], memory[3], memory[4]);
+    for (k = 0; k < flash_size; k = k + 1)
+      memory[k] = 8'hFF;
+    if (!$value$plusargs("FIRMWARE=%s", fname))
+      fname = FILENAME;
+    $display("spiflash: reading %0s", fname);
+    $readmemh(fname, memory);
+    $display("spiflash: first bytes 0x%02x 0x%02x 0x%02x 0x%02x", memory[0],
+             memory[1], memory[2], memory[3]);
   end
 
   task spi_action;

@@ -36,13 +36,11 @@ module psram (
   reg [7:0] data;
   reg [7:0] cycle_count;
 
-  //reg [7:0] RAM[32*1024-1:0];  // 32Kbytes
-  reg [7:0] RAM[4*1024-1:0];   // 4Kbytes
-  //reg [7:0] RAM[512-1:0];     // 512 bytes
+  reg [7:0] RAM[64*1024-1:0];  // 64 KB: LISA's 32K data space and more
 
   initial begin
    integer c;
-   for (c = 0; c < 4*1024; c = c + 1)
+   for (c = 0; c < 64*1024; c = c + 1)
       RAM[c] = 8'h0;
   end
 

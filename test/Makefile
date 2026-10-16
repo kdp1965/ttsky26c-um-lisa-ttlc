@@ -2,7 +2,18 @@
 # See https://docs.cocotb.org/en/stable/quickstart.html for more info
 
 # defaults
-SIM ?= icarus
+# Verilator when it is installed (cocotb needs 5.036 or later), else icarus:
+# make SIM=icarus.  On this Mac cocotb's libraries are x86_64 builds.
+SIM ?= $(if $(shell which verilator),verilator,icarus)
+ifeq ($(SIM),verilator)
+EXTRA_ARGS += -Wno-fatal -Wno-lint -Wno-style --timing
+ifeq ($(shell uname),Darwin)
+ifeq ($(shell $(shell cocotb-config --python-bin) -c "import platform; print(platform.machine())"),x86_64)
+EXTRA_ARGS += -CFLAGS "-arch x86_64" -LDFLAGS "-arch x86_64"
+endif
+endif
+endif
+.DEFAULT_GOAL := sim
 FST ?= -fst # Use more efficient FST format
 TOPLEVEL_LANG ?= verilog
 SRC_DIR = $(PWD)/../src
@@ -58,6 +69,31 @@ TOPLEVEL = tb
 # List test modules to run, separated by commas and without the .py suffix:
 COCOTB_TEST_MODULES = test
 MODULE = test
+
+# A program from the SDCC test suite (or any Intel HEX / @addr / opcode-per-line
+# image): make IHX=<file> [CACHE=1] [SPI=1] [TIMEOUT=<clocks of silence>] [DUMP=1]
+ifeq ($(IHX),)
+PLUSARGS += +FIRMWARE=$(PWD)/progs/hello.hex +PROGRAM=hello.hex +DEFAULT
+else
+FIRMWARE = $(PWD)/$(SIM_BUILD)/$(notdir $(basename $(IHX))).hex
+PLUSARGS += +FIRMWARE=$(FIRMWARE) +PROGRAM=$(notdir $(IHX))
+CUSTOM_SIM_DEPS += $(FIRMWARE)
+$(FIRMWARE): $(IHX) ihx2hex.py
+	mkdir -p $(dir $@)
+	$(PYTHON_BIN) ihx2hex.py $< $@
+endif
+ifneq ($(CACHE),)
+PLUSARGS += +CACHE
+endif
+ifneq ($(SPI),)
+PLUSARGS += +SPI
+endif
+ifneq ($(TIMEOUT),)
+PLUSARGS += +TIMEOUT=$(TIMEOUT)
+endif
+ifneq ($(DUMP),)
+PLUSARGS += +DUMP
+endif
 
 # include cocotb's make rules to take care of the simulator setup
 include $(shell cocotb-config --makefiles)/Makefile.sim

@@ -8,8 +8,7 @@ that can be driven / tested by the cocotb test.py
 
 module tb
 (
-   // testbench is controlled by test.py
-   input  wire          clk,
+   // testbench is controlled by test.py (the clock runs here: 50 MHz)
    input  wire          rst_n,
    input  wire          ena,
    input  wire  [7:0]   tx_d,
@@ -23,14 +22,17 @@ module tb
    output wire  [7:0]   porta_out
 );
 
+   reg            clk = 1'b0;
+   always #10 clk = ~clk;
+
    wire     [7:0] ui_in;
    wire     [7:0] uo_out;
    wire     [7:0] uio_oe;
    wire     [7:0] uio_out;
    wire     [7:0] uio_in;
 
-   reg            ce0;
-   reg            ce1;
+   wire           ce0;
+   wire           ce1;
    wire           sclk;
    wire           dq0;
    wire           dq1;
@@ -45,8 +47,11 @@ module tb
 
    // this part dumps the trace to a vcd file that can be viewed with GTKWave
    initial begin
-//     $dumpfile("tb.vcd");
-//     $dumpvars(0, tb);
+     if ($test$plusargs("DUMP"))
+     begin
+        $dumpfile("tb.vcd");
+        $dumpvars(0, tb);
+     end
      #1;
    end
 
@@ -91,16 +96,11 @@ module tb
    pullup (dq3);
 
    // ==========================================================================
-   // Implement the "PMOD board level" CE latches
+   // The chip selects: plain SPI pins (io mux 0x1c bits 1:0 = 3 puts CE1 on
+   // uio[4]); the TT07 testbench modelled the custom Pmod's CE latches here
    // ==========================================================================
-   always @(uio_out[0] or uio_out[1] or uio_out[2])
-   begin
-      if (uio_out[0])
-      begin
-         ce0 = uio_out[1];
-         ce1 = uio_out[2];
-      end
-   end
+   assign ce0 = uio_out[0];
+   assign ce1 = uio_out[4];
 
    // ==========================================================================
    // Connect the UART to the port specified
@@ -149,7 +149,7 @@ module tb
       .baud_ref   ( baud_ref     )
    );
    assign baud_set = 1'b1;
-   assign baud_div = 7'd81;
+   assign baud_div = 7'd8;      // = ui_in[6:0] with bit 3 (the RX pin, idle high) set
 
    // ==========================================================================
    // Assign the port I/O
