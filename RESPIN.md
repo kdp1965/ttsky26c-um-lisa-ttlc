@@ -289,7 +289,7 @@ for loading code). By design; keep, and keep it out of the debuggers' polls
 ## Hardening (harden/, 2026-10-15 ..)
 
 * The tile is 4x4 (the 8x2 of TT07 was too small with the RAM synthesized:
-  ~90% utilization, detailed placement failed); placement density 85.
+  ~90% utilization, detailed placement failed).
   `make -C harden` is the standard flow (RAM from `src/RAM32.v`), `make -C
   harden macro` places the RAM32 DFFRAM macro (`macro.json`) and runs the
   tile's power stripes over its met4 pins after the PDN.
@@ -309,12 +309,47 @@ for loading code). By design; keep, and keep it out of the debuggers' polls
   because this PDK's `no_synth.cells` excludes nearly every `_1` logic cell
   and flop; TT07's build used them (its layout netlist is 24K `_1` cells of
   35K). With `src/no_synth.cells` (the PDK list without the `_1`
-  combinational cells and plain flops) synthesis gives 178K. Before that,
+  combinational cells and plain flops) synthesis gives 178K, placement
+  utilization drops from ~79% to ~60% (standard 61.2%, macro 59.7%), setup
+  is met after CTS in both flows and the post-CTS legalization passes;
+  the price is more slew/cap resizing (about 200 cells against 30) and
+  more hold buffers (2456 / 1432 against 1964 / 971). Before that,
   both flavours sat near 80% utilization before any repair, and the flow's
   hold buffers, setup buffers and antenna diodes pushed a full edge over:
   detailed placement failed on a few cells after the post-CTS resizer (the
   pocket beside the macro; PL_MAX_DISPLACEMENT_Y 300 lets cells leave it)
   and, for the standard flow, at diode insertion.
+* Routing (2026-10-16): with the `_1` cells and placement density 85 both
+  flows reached the detailed router and did not converge there: the
+  standard flow's global route was 128% of the met1-met4 resources (2.56M
+  um of wire for 28.6K nets) and the router diverged to 1.5M violations;
+  the macro flow's global route was 74% (1.36M um, 23K nets) but the
+  router sat at 20K violations after 12 iterations (29 minutes each). A
+  30 um binning of the macro flow's DRC report against its placement put
+  86% of the violations in bins more than 75% full of cells and the worst
+  bins (above the macro's right end, under the top-edge pins) at 92-98%,
+  mostly met1 shorts the size of a via landing. The target density is not
+  the lever: global placement itself spreads the cells (mean 51%, one bin
+  at 90% with target 85, 88% with 68) and what fills the bins comes after
+  it - the slew and fanout repair (+16%: 2598 buffers in 1283 nets; with
+  the `_1` cells every gate starts at the smallest drive), CTS (+4%) and
+  1400 hold buffers (+10%: 1283 endpoints under the 0.1 ns margin at the
+  nominal corner; TT07 had 765) - and the legalizer packs them where they
+  land: 46-48 bins over 90% at either density. TT07's own layout, binned
+  the same way from its GDS, has the same profile (mean 68%, 35 of 298
+  bins over 90%, max 98%) and routed with OpenLane 2.0.4 on the 8x2 tile.
+  GPL_CELL_PADDING 2 (a site each side of every cell in global placement,
+  +35% on the 2.6 um average cell; the padded utilization is 80%, so the
+  target stays 85) reserves the room: 18 bins over 90% after the hold
+  buffers, the global route at 65% with an overflow of 4 (1852-3670
+  before) and 1.16M um of wire (1.36M). The standard flow (RAM
+  synthesized) is out of reach on this tile: its global route needs 128%
+  of the resources at density 85 and 144% at 70 (2.56M / 2.76M um for
+  28.6K nets), and the GitHub run of it hit the runner's 6-hour limit in
+  detailed routing at 575K violations. `make -C harden macro TILES=8x2`
+  runs the macro flow on the TT07 tile with TT07's placement
+  (macro_8x2.json) as the check against the tools; `make TO=
+  OpenROAD.GlobalRouting` stops after the congestion report.
 * Found on the way: Yosys names a flattened net after any alias (the
   debugger's data bus is `core_inst_o[*]` in the netlist), the breakpoint
   registers are latches, and OpenSTA's `read_sdc` fails on an exception

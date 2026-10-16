@@ -3,6 +3,8 @@
   "REMOVE_SOURCES": [
     "RAM32.v"
   ],
+  "//": "GPL_CELL_PADDING 2 (a site each side of every cell in global placement, +35% on this design's 2.6 um average cell) reserves the room the flow fills afterwards: the std cells are 60% of the rows after placement and the slew/fanout repair (+16%, 2598 buffers), CTS (+4%) and the 1400 hold buffers (+10%) then took the densest 30 um bins to 92-100%, where the detailed router did not converge (density 85 and 68 alike: 48 and 46 bins over 90%). With the padding the placer's utilization is 81%, so the target density goes back up to 85 (81% of a bin in padded cells is 63% in real ones). TT07 placed at 77 on the 8x2 tile.",
+  "GPL_CELL_PADDING": 2,
   "PL_TARGET_DENSITY_PCT": 85,
   "FP_MACRO_HORIZONTAL_HALO": 6,
   "FP_MACRO_VERTICAL_HALO": 6,

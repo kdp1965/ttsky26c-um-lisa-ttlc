@@ -13,6 +13,13 @@
 LIBRELANE ?= $(HOME)/projects/tiny_tapeout/librelane
 export PDK_ROOT ?= $(HOME)/projects/fossi
 TAG ?= $(shell date +%Y%m%d-%H%M%S)
+# TO=Step.Id stops after that step: TO=OpenROAD.GlobalRouting shows the
+# congestion report before the hours of detailed routing.
+TO ?=
+FLOW_TO = $(if $(TO),--to=$(TO),)
+# TILES=8x2 tries another tile (harden/tt_block_8x2_pg.def, macro_8x2.json)
+TILES ?=
+CONF_TILES = $(if $(TILES),--tiles=$(TILES),)
 
 ifeq ($(IN_NIX_SHELL),)
 NIX_RUN = nix-shell $(LIBRELANE)/shell.nix --run
@@ -21,10 +28,10 @@ NIX_RUN = sh -c
 endif
 
 standard:
-	$(NIX_RUN) "python3 configure.py && python3 flow.py standard-$(TAG)"
+	$(NIX_RUN) "python3 configure.py $(CONF_TILES) && python3 flow.py $(FLOW_TO) standard-$(TAG)"
 
 macro:
-	$(NIX_RUN) "python3 configure.py --macro && python3 flow.py --macro macro-$(TAG)"
+	$(NIX_RUN) "python3 configure.py --macro $(CONF_TILES) && python3 flow.py --macro $(FLOW_TO) macro-$(TAG)"
 
 synth:
 	$(NIX_RUN) "python3 configure.py && python3 flow.py --to=Yosys.Synthesis synth-$(TAG)"

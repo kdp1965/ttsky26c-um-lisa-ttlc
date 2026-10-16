@@ -5,8 +5,8 @@
   "//": "The TT07 chip was hardened locally instead (../build.py, ../config.json)",
   "//": "to place the RAM32 DFFRAM macro; see README.md.",
 
-  "//": "PL_TARGET_DENSITY_PCT - increase if Global Placement fails with GPL-0302.",
-  "PL_TARGET_DENSITY_PCT": 85,
+  "//": "PL_TARGET_DENSITY_PCT - increase if Global Placement fails with GPL-0302. This standard flow (the RAM synthesized) does not route on the 4x4 tile: its global route needs 128% of the met1-met4 resources at 85 and 144% at 70; the chip is built with the RAM32 macro (harden/, gds_custom.yaml), see RESPIN.md.",
+  "PL_TARGET_DENSITY_PCT": 70,
 
   "//": "CLOCK_PERIOD in ns: 30 ns == 33 MHz, the TT07 constraint (its impl.sdc; the chip runs at 66 MHz).",
   "CLOCK_PERIOD": 30,

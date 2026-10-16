@@ -60,6 +60,8 @@ make -C harden            # the standard Tiny Tapeout flow: the RAM synthesized 
 make -C harden macro      # with the RAM32 DFFRAM macro (macros/): harden/macro.json places it,
                           # flow.py runs the tile's power stripes over its met4 pins after the PDN
 make -C harden shell      # the nix shell itself
+make -C harden macro TO=OpenROAD.GlobalRouting   # stop after the congestion report
+make -C harden macro TILES=8x2                   # another tile: tt_block_8x2_pg.def, macro_8x2.json
 ```
 
 `configure.py` builds `config_merged.json` the way tt-support-tools'
@@ -67,6 +69,12 @@ make -C harden shell      # the nix shell itself
 template from `info.yaml`, over `src/config.json`); results land in
 `harden/runs/<tag>/final/`. For a submission, copy the macro build's GDS,
 LEF and netlist to `gds/`, `lef/` and `pnl/` and run `gds_custom.yaml`.
+The macro flow places with `GPL_CELL_PADDING` 2: the slew/fanout repair, CTS
+and the hold buffers add 30% to the placed cells and without the padding the
+legalizer packs them into 30 um bins over 90% full, where the detailed router
+does not converge (RESPIN.md, Hardening). The standard flow does not route on
+this tile (its global route needs 128-144% of the met1-met4 resources).
+`make -C harden macro TILES=8x2` tries the macro flow on the TT07 tile.
 
 The timing constraints are `src/lisa.sdc`: LibreLane's `base.sdc` (the
 clock from `CLOCK_PERIOD`, 30 ns as the TT07 build was constrained - its

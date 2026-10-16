@@ -1,10 +1,14 @@
 #!/usr/bin/env python3
-"""configure.py [--macro] - the LibreLane configuration for a local harden,
-built the way tt-support-tools' --create-user-config does it: the sources,
-die area and floorplan template from ../info.yaml's tile, merged over
-../src/config.json; with --macro, macro.json on top (the RAM32 DFFRAM macro
-in place of src/RAM32.v).  Writes config_merged.json, or config_merged_macro.json
-with --macro, so the two flows can run at the same time."""
+"""configure.py [--macro] [--tiles=8x2] - the LibreLane configuration for a
+local harden, built the way tt-support-tools' --create-user-config does it:
+the sources, die area and floorplan template from ../info.yaml's tile, merged
+over ../src/config.json; with --macro, macro.json on top (the RAM32 DFFRAM
+macro in place of src/RAM32.v).  --tiles=WxH tries another tile (its
+tt_block_WxH_pg.def must be here); with --macro, macro_WxH.json is then
+merged last: its MACRO_LOCATIONS {instance: [x, y]} move the macros, the
+rest are plain variables.  Writes config_merged.json, or
+config_merged_macro.json with --macro, so the two flows can run at the same
+time."""
 import json
 import os
 import sys
@@ -31,7 +35,7 @@ def load_json(path):
 def main():
     macro = "--macro" in sys.argv
     info = yaml.safe_load(open(os.path.join(ROOT, "info.yaml")))["project"]
-    tiles = info["tiles"]
+    tiles = next((a.split("=", 1)[1] for a in sys.argv if a.startswith("--tiles=")), info["tiles"])
     sources = list(info["source_files"])
     cfg = load_json(os.path.join(ROOT, "src", "config.json"))
     # src/config.json's dir:: paths are relative to src/; config_merged.json lives here
@@ -43,6 +47,14 @@ def main():
         for s in over.pop("REMOVE_SOURCES", []):
             sources.remove(s)
         cfg.update(over)
+        tile_json = os.path.join(HERE, "macro_%s.json" % tiles)
+        if os.path.exists(tile_json):
+            tile_over = load_json(tile_json)
+            for inst, loc in tile_over.pop("MACRO_LOCATIONS", {}).items():
+                for m in cfg["MACROS"].values():
+                    if inst in m["instances"]:
+                        m["instances"][inst]["location"] = loc
+            cfg.update(tile_over)
     cfg["DRT_SAVE_DRC_REPORT_ITERS"] = 4        # a DRC report every 4 router iterations (status.py)
     cfg.update({
         "DESIGN_NAME": info["top_module"],
@@ -68,6 +80,8 @@ def main():
         json.dump(cfg, f, indent=2)
     print("%s: %s tile %s, %d sources%s" % (out, info["top_module"], tiles, len(sources),
                                              ", the RAM32 macro" if macro else ""))
+    if tiles != info["tiles"]:
+        print("   (info.yaml says %s: this is a trial on another tile)" % info["tiles"])
 
 
 if __name__ == "__main__":

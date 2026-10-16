@@ -1,0 +1,6 @@
+{
+  "//": "The macro flow on the TT07 tile (make macro TILES=8x2): the RAM32 where TT07 had it, TT07's density, no padding - the check that separates this design on the 4x4 tile from the tools (TT07's layout has the same density profile, 35 of 298 30 um bins over 90%, and routed).",
+  "MACRO_LOCATIONS": { "ram1": [971.6, 10] },
+  "PL_TARGET_DENSITY_PCT": 77,
+  "GPL_CELL_PADDING": 0
+}
