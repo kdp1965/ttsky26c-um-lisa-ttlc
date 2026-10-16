@@ -20,6 +20,9 @@ FLOW_TO = $(if $(TO),--to=$(TO),)
 # TILES=8x2 tries another tile (harden/tt_block_8x2_pg.def, macro_8x2.json)
 TILES ?=
 CONF_TILES = $(if $(TILES),--tiles=$(TILES),)
+# OVERLAY=trial.json: a JSON of variables merged last (a per-run trial)
+OVERLAY ?=
+CONF_TILES += $(if $(OVERLAY),--overlay=$(OVERLAY),)
 
 ifeq ($(IN_NIX_SHELL),)
 NIX_RUN = nix-shell $(LIBRELANE)/shell.nix --run

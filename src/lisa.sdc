@@ -75,6 +75,10 @@ set sp         [lisa_regs {i_lisa_core.sp[*]}]
 set cond       [lisa_regs {i_lisa_core.cond[*]}]
 set ie         [lisa_regs {i_lisa_core.ie}]
 set isr_jump   [lisa_regs {i_lisa_core.isr_jump}]
+# rev 2: the ISR shadows (issue 6), written in the same clock and branch as
+# ia, isr_jump and ie when the interrupt is taken
+set isr_sh     [lisa_regs {i_lisa_core.cflag_isr} {i_lisa_core.zflag_isr} {i_lisa_core.signed_inv_isr} \
+                          {i_lisa_core.cflag_save_isr} {i_lisa_core.signed_inv_live_isr} {i_lisa_core.amode_isr[*]}]
 set div_rs1    [lisa_regs "$div.div_rs1\[*\]" {i_lisa_core.div_rs1[*]}]
 set div_rs2    [lisa_regs "$div.div_rs2\[*\]" {i_lisa_core.div_rs2[*]}]
 set div_zflag  [lisa_regs "$div.zflag" "$div.zflag_r"]
@@ -83,7 +87,7 @@ set div_ixc    [lisa_regs "$div.ix_cond"]
 set div_sinv   [lisa_regs "$div.signed_inversion"]
 
 set groups {pc cl_valid cl_addr brk dbg_a dbg_di dbg_we dbg_halted cont_q predec d_we_r
-            facc ix ra ia sp cond ie isr_jump div_rs1 div_rs2 div_zflag div_cond div_ixc div_sinv}
+            facc ix ra ia sp cond ie isr_jump isr_sh div_rs1 div_rs2 div_zflag div_cond div_ixc div_sinv}
 set report "lisa.sdc:"
 foreach g $groups { append report " $g [llength [set $g]]" }
 puts $report
@@ -93,7 +97,7 @@ foreach g $groups {
 
 # the registers written at the end of an instruction (three clocks from the
 # PC) and the divider's operands (two)
-set core3 [concat $facc $ix $ra $ia $sp $cond $ie $isr_jump $div_zflag $div_cond $div_ixc $div_sinv]
+set core3 [concat $facc $ix $ra $ia $sp $cond $ie $isr_jump $isr_sh $div_zflag $div_cond $div_ixc $div_sinv]
 set core2 [concat $div_rs1 $div_rs2]
 
 lisa_mcp 3 $pc [concat $pc $core3]
@@ -106,7 +110,7 @@ foreach src [list $cl_valid $cl_addr] {
 # the debugger: its address register is seen like the PC; its data, write,
 # halted and continue strobes and the breakpoint compare reach the registers
 # two clocks later
-lisa_mcp 3 $dbg_a [concat $pc $facc $ix $ra $ia $sp $cond $ie $div_cond $div_ixc $div_sinv]
+lisa_mcp 3 $dbg_a [concat $pc $facc $ix $ra $ia $sp $cond $ie $isr_sh $div_cond $div_ixc $div_sinv]
 lisa_mcp 2 $dbg_a $core2
 set dbg_to [concat $facc $div_rs1 $div_rs2 $ra $ia $ix $sp $cond $div_cond $div_ixc]
 foreach src [list $brk $dbg_we $dbg_halted $dbg_di $cont_q] {

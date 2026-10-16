@@ -1,0 +1,6 @@
+{
+  "//": "Trial fix6: fix4 (no post-global-route repairs) with the registers AND the combinational cells pinned where the second routed build had them (placements/macro-fix_final_cells.json, an odb_anchor_cells.py --dump of that build's final ODB: registers matched by RTL name, logic by structure - 18682 of 18698 cells pair) before global placement and released after it. The flow's own buffers (fanout, clock, hold) are placed around that skeleton as in the reference run.",
+  "RUN_POST_GRT_DESIGN_REPAIR": false,
+  "RUN_POST_GRT_RESIZER_TIMING": false,
+  "ANCHOR_CELLS_TABLE": "dir::placements/macro-fix_final_cells.json"
+}

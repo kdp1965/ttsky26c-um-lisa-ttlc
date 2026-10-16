@@ -8,6 +8,14 @@
 # to the top of the core as tile stripes (and tile power pins), which bridges
 # the gap and lands exactly on the macro pins. It warns if a macro pin column
 # is not aligned with an existing tile stripe.
+#
+# A column that is not on a tile stripe would be an island with the macro
+# pin (the IR-drop step's check_power_grid failed on VGND; VPWR only passed
+# through a 0.57 um overlap with a tile stripe): pdn_macro.tcl (PDN_CFG) has
+# pdngen put a stripe with its via arrays on every such column first, and the
+# full-height stripe drawn here lies on it.  (Via stacks drawn here from
+# single M1M2_PR/M2M3_PR/M3M4_PR vias were 2175 Magic DRC errors: met3 minimum
+# area and via spacing to the neighbouring tile stripe's arrays.)
 import click
 import odb
 from reader import click_odb
@@ -68,7 +76,7 @@ def extend(reader, layer):
                     nearest = min(
                         (abs((e.xMin() + e.xMax()) / 2 - cx) for e in existing), default=None
                     )
-                    if nearest is None or nearest > 0.05 * dbu:
+                    if nearest is None or nearest > 0.85 * dbu:  # pdn_macro.tcl may move a stripe by up to width/2
                         print(
                             f"[WARNING] {inst.getName()} {net_name} pin column at x={cx/dbu:.3f} um is "
                             f"{'not near any' if nearest is None else f'{nearest/dbu:.3f} um off the nearest'} tile stripe"

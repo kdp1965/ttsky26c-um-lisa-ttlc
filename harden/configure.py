@@ -6,7 +6,9 @@ over ../src/config.json; with --macro, macro.json on top (the RAM32 DFFRAM
 macro in place of src/RAM32.v).  --tiles=WxH tries another tile (its
 tt_block_WxH_pg.def must be here); with --macro, macro_WxH.json is then
 merged last: its MACRO_LOCATIONS {instance: [x, y]} move the macros, the
-rest are plain variables.  Writes config_merged.json, or
+rest are plain variables.  --overlay=FILE merges one more JSON of plain
+variables last (a per-run trial: `make macro OVERLAY=trial.json`).  Writes
+config_merged.json, or
 config_merged_macro.json with --macro, so the two flows can run at the same
 time."""
 import json
@@ -55,6 +57,9 @@ def main():
                     if inst in m["instances"]:
                         m["instances"][inst]["location"] = loc
             cfg.update(tile_over)
+    overlay = next((a.split("=", 1)[1] for a in sys.argv if a.startswith("--overlay=")), None)
+    if overlay:
+        cfg.update({k: v for k, v in load_json(overlay).items() if k != "//"})
     cfg["DRT_SAVE_DRC_REPORT_ITERS"] = 4        # a DRC report every 4 router iterations (status.py)
     cfg.update({
         "DESIGN_NAME": info["top_module"],
@@ -78,8 +83,9 @@ def main():
     out = os.path.join(HERE, "config_merged_macro.json" if macro else "config_merged.json")
     with open(out, "w", encoding="utf8") as f:
         json.dump(cfg, f, indent=2)
-    print("%s: %s tile %s, %d sources%s" % (out, info["top_module"], tiles, len(sources),
-                                             ", the RAM32 macro" if macro else ""))
+    print("%s: %s tile %s, %d sources%s%s" % (out, info["top_module"], tiles, len(sources),
+                                               ", the RAM32 macro" if macro else "",
+                                               ", overlay %s" % overlay if overlay else ""))
     if tiles != info["tiles"]:
         print("   (info.yaml says %s: this is a trial on another tile)" % info["tiles"])
 

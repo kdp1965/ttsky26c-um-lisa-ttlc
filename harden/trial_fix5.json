@@ -1,0 +1,6 @@
+{
+  "//": "Trial fix5: fix4 (no post-global-route repairs) with the registers pinned to the second routed build's final placement (runs/macro-fix, the one that routed clean: placements/macro-fix_final_seq.json from seq_placement.py) before global placement and released after it - the prism recipe that turned unroutable runs routable. The combinational cells and the flow's buffers place around that skeleton.",
+  "RUN_POST_GRT_DESIGN_REPAIR": false,
+  "RUN_POST_GRT_RESIZER_TIMING": false,
+  "ANCHOR_SEQ_TABLE": "dir::placements/macro-fix_final_seq.json"
+}

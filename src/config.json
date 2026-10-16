@@ -14,6 +14,10 @@
   "//": "PL_MAX_DISPLACEMENT_Y - the legalizer may move a cell this far (um; 100 by default): the short rows beside the RAM32 macro (146 um tall) run ~90% full and after the hold buffers a few cells there have to leave the pocket.",
   "PL_MAX_DISPLACEMENT_Y": 300,
 
+  "//": "RUN_POST_GRT_DESIGN_REPAIR, RUN_POST_GRT_RESIZER_TIMING - off: tried for the post-route slews (the placement-stage estimate is far below extraction here), they add ~20 buffers and 60 upsizes, then re-legalize with ~10K mirrored instances after the global route and tripled the detailed router's violations in the dense bins (RESPIN.md, the third build).",
+  "RUN_POST_GRT_DESIGN_REPAIR": 0,
+  "RUN_POST_GRT_RESIZER_TIMING": 0,
+
   "//": "Hold slack margin - increase in case of hold violations.",
   "PL_RESIZER_HOLD_SLACK_MARGIN": 0.1,
   "GRT_RESIZER_HOLD_SLACK_MARGIN": 0.05,
@@ -30,7 +34,15 @@
 
   "SYNTH_STRATEGY": "AREA 1",
 
-  "//": "SYNTH_EXCLUDED_CELL_FILE - the PDK's no_synth.cells keeps synthesis off nearly every _1 logic cell and flop (199 entries), so the design maps to _2 cells and comes out ~25% larger than TT07's build (OpenLane 2, 2024 PDK), which used them. src/no_synth.cells is the PDK list without the _1 combinational cells and plain flops; the clock, delay, scan and latch cells stay excluded.",
+  "//": "EXTRA_EXCLUDED_CELLS - LibreLane keeps the resizer off only the PDK's drc_exclude.cells, and OpenROAD starts every fanout, wire and port buffer from the weakest buffer left, which on sky130 is the delay cell clkdlybuf4s25_1 (1548 of 1589 fanout buffers in the first routed build: 1.4-2.5 ns slews, -9.4 ns setup at the slow corner after routing). TT07's OpenLane 2 build used buf_2 / clkbuf_4 / buf_4. The delay cells stay out of the data repairs; dlygate4sd3_1 stays in for the hold repair (TT07's hold buffer).",
+  "EXTRA_EXCLUDED_CELLS": [
+    "sky130_fd_sc_hd__clkdlybuf4s25_1", "sky130_fd_sc_hd__clkdlybuf4s25_2",
+    "sky130_fd_sc_hd__clkdlybuf4s50_1", "sky130_fd_sc_hd__clkdlybuf4s50_2",
+    "sky130_fd_sc_hd__dlymetal6s2s_1", "sky130_fd_sc_hd__dlymetal6s4s_1", "sky130_fd_sc_hd__dlymetal6s6s_1",
+    "sky130_fd_sc_hd__dlygate4sd1_1", "sky130_fd_sc_hd__dlygate4sd2_1"
+  ],
+
+  "//": "SYNTH_EXCLUDED_CELL_FILE - the PDK's no_synth.cells keeps synthesis off nearly every _1 logic cell and flop (199 entries), so the design maps to _2 cells and comes out ~25% larger than TT07's build, which used them (16.4K of its 20K logic cells are _1; how its OpenLane 2.0.4 run got past the same list is not known). Upstream open_pdks removed the combinational _1 cells from the list on 2026-05-28 (now libs.tech/librelane/.../synth_excluded.cells, 23 globs), but every LibreLane 3.0.x release so far, the TT action's 3.0.5 included, pins open_pdks 8afc834 of 2025-07 with the 199-entry list. src/no_synth.cells is the PDK list without the _1 combinational cells and plain flops; the clock, delay, scan and latch cells stay excluded.",
   "SYNTH_EXCLUDED_CELL_FILE": "dir::no_synth.cells",
 
   "//": "Configuration docs: https://librelane.readthedocs.io/en/latest/reference/configuration.html",

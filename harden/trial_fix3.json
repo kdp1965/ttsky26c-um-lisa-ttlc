@@ -1,0 +1,30 @@
+{
+  "//": "Trial fix3: fix4 (no post-global-route repairs) plus a site of padding each side of every buffer at legalization (fanout/wire buffers, clock buffers, hold delay cells) and none on the logic, flops, taps and fills: the flow's post-placement additions then have to find room instead of packing the flop clusters, where the detailed router stalled (fix2's top-left corner: rows 92% full, 4105 violations at iteration 4). OpenROAD matches CELL_PAD_EXCLUDE with Tcl string match (globs), so the list names every other family; the PDK's default entries (tap, decap, fill) are included.",
+  "RUN_POST_GRT_DESIGN_REPAIR": false,
+  "RUN_POST_GRT_RESIZER_TIMING": false,
+  "DPL_CELL_PADDING": 2,
+  "CELL_PAD_EXCLUDE": [
+    "sky130_fd_sc_hd__a*",
+    "sky130_fd_sc_hd__bufbuf*",
+    "sky130_fd_sc_hd__bufinv*",
+    "sky130_fd_sc_hd__clkinv*",
+    "sky130_fd_sc_hd__conb*",
+    "sky130_fd_sc_hd__df*",
+    "sky130_fd_sc_hd__dl[rxc]*",
+    "sky130_fd_sc_hd__decap*",
+    "sky130_ef_sc_hd__decap*",
+    "sky130_fd_sc_hd__diode*",
+    "sky130_fd_sc_hd__e*",
+    "sky130_fd_sc_hd__f*",
+    "sky130_fd_sc_hd__ha*",
+    "sky130_fd_sc_hd__inv*",
+    "sky130_fd_sc_hd__lpflow*",
+    "sky130_fd_sc_hd__m*",
+    "sky130_fd_sc_hd__n*",
+    "sky130_fd_sc_hd__o*",
+    "sky130_fd_sc_hd__p*",
+    "sky130_fd_sc_hd__s*",
+    "sky130_fd_sc_hd__t*",
+    "sky130_fd_sc_hd__x*"
+  ]
+}

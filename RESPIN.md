@@ -308,7 +308,12 @@ for loading code). By design; keep, and keep it out of the debuggers' polls
   each, and the new fadd, +0.6K), but LibreLane synthesized it to 229K
   because this PDK's `no_synth.cells` excludes nearly every `_1` logic cell
   and flop; TT07's build used them (its layout netlist is 24K `_1` cells of
-  35K). With `src/no_synth.cells` (the PDK list without the `_1`
+  35K, 16.4K of its 20K logic cells; how its OpenLane 2.0.4 run got past the
+  same 199-entry list is not known). Upstream open_pdks dropped the
+  combinational `_1` cells from the list on 2026-05-28 (now
+  `libs.tech/librelane/sky130_fd_sc_hd/synth_excluded.cells`, 23 globs), but
+  every LibreLane 3.0.x release so far, the TT action's 3.0.5 included, pins
+  open_pdks 8afc834 of 2025-07 with the old list. With `src/no_synth.cells` (the PDK list without the `_1`
   combinational cells and plain flops) synthesis gives 178K, placement
   utilization drops from ~79% to ~60% (standard 61.2%, macro 59.7%), setup
   is met after CTS in both flows and the post-CTS legalization passes;
@@ -342,14 +347,150 @@ for loading code). By design; keep, and keep it out of the debuggers' polls
   +35% on the 2.6 um average cell; the padded utilization is 80%, so the
   target stays 85) reserves the room: 18 bins over 90% after the hold
   buffers, the global route at 65% with an overflow of 4 (1852-3670
-  before) and 1.16M um of wire (1.36M). The standard flow (RAM
+  before) and 1.16M um of wire (1.36M), and the detailed route is clean
+  after 17 iterations in 13 minutes (30985, 22896, 21625, 5747, 1748 ...
+  3, 0 violations). The standard flow (RAM
   synthesized) is out of reach on this tile: its global route needs 128%
   of the resources at density 85 and 144% at 70 (2.56M / 2.76M um for
   28.6K nets), and the GitHub run of it hit the runner's 6-hour limit in
   detailed routing at 575K violations. `make -C harden macro TILES=8x2`
   runs the macro flow on the TT07 tile with TT07's placement
-  (macro_8x2.json) as the check against the tools; `make TO=
-  OpenROAD.GlobalRouting` stops after the congestion report.
+  (macro_8x2.json), meant as the check against the tools; but this design
+  is 5% bigger than TT07's after the flow (192K against 182.5K um2 of std
+  cells) and on that tile it places at 69%, ends with 88 bins over 90% and
+  a global route at 113% of the resources, so the comparison needs TT07's
+  own netlist and was not pursued. `make TO=OpenROAD.GlobalRouting` stops
+  after the congestion report.
+* Signoff of the first routed build (padding 2; 2026-10-16): the router,
+  antenna check (0 after repair) and wire-length check passed, hold is met
+  at every corner (worst +0.108 ns), setup is +5.1 ns at the nominal corner
+  but -9.4 ns at the slow one (ss, 100 C, 1.60 V; 250 endpoints) where the
+  post-CTS repair had left +0.18 ns, with 11297 max-slew and 775 max-cap
+  violations after extraction. The paths run through the fanout buffers:
+  LibreLane keeps the resizer off only the PDK's `drc_exclude.cells`, and
+  OpenROAD starts every fanout, wire and port buffer from the weakest
+  buffer it may use, which on sky130 is the delay cell `clkdlybuf4s25_1`:
+  1548 of the 1589 fanout buffers (TT07's OpenLane 2 build has buf_2,
+  clkbuf_4, clkbuf_2 and buf_4 there), each 1.0-1.85 ns at the slow corner
+  with 1.3-1.8 ns slews. `EXTRA_EXCLUDED_CELLS` in src/config.json now
+  keeps the delay cells (clkdlybuf4s25/50, dlymetal6s*, dlygate4sd1/2) out
+  of the repairs; `dlygate4sd3_1` stays for the hold buffers. The flow then
+  stopped at the IR-drop step: `check_power_grid` found the macro's VGND an
+  island - the two full-height stripes the Tile.ExtendPowerStripes step
+  draws over the macro's VGND pin columns are 5.3 and 7.2 um off the
+  nearest tile stripes and touched nothing else, and VPWR passed only
+  through a 0.57 um overlap of one of its three with a tile stripe (TT07's
+  build drew the same stripes, as tile power pins, and relied on the
+  chip-level straps). The step now adds via stacks (M1M2_PR, M2M3_PR,
+  M3M4_PR, two per crossing) from each added stripe to every rail of its
+  net above the macro, as pdngen does for its own stripes.
+* Second routed build (delay cells excluded, via stacks; 2026-10-16): routed
+  clean (40 iterations), antenna clean, LVS clean (netgen: circuits match
+  uniquely), both power nets connected with 0.1 mV of IR drop, hold met at
+  every corner; setup +5.2 ns nominal, -5.5 / -6.9 ns at the ss corners
+  (115 / 163 endpoints) and still 2681 max-slew violations at the nominal
+  corner (0.75 ns limit, slews 0.8-2 ns on fanout nets; the fanout buffers
+  are now `buf_1`, the weakest buffer left). Magic DRC: 2175 errors, all at
+  the hand-made via stacks (met3 minimum area on the single-via pads, via
+  spacing to the neighbouring tile stripe's arrays) - replaced by
+  `harden/pdn_macro.tcl` (`PDN_CFG`): pdngen itself puts a stripe with its
+  via arrays on each macro pin column that is not on a tile stripe (the
+  offset is the centre of the first stripe: VPWR at 19.08 + k * 38.87 um,
+  VGND 3.3 um after), and the extension step only bridges over the macro.
+  The slow-corner paths all start at the PC and end at the rev-2 interrupt
+  shadows (`cflag_isr`, `zflag_isr`, `signed_inv_isr`, `cflag_save_isr`,
+  `signed_inv_live_isr`, `amode_isr`), written in the same clock and branch
+  as `ia`, `isr_jump` and `ie` when the interrupt is taken - lisa.sdc now
+  lists them with those (3 cycles). Left as they are, for Ken: PC ->
+  `acc_delayed_val` (same slack, the RMW-on-a-miss delayed accumulator, a
+  different write condition) and the debugger's `fetch_r` -> `facc` (-5.8
+  ns at ss, +5 nominal). The pre-route estimate is far from the extracted
+  wires here (everything met before routing), so `RUN_POST_GRT_DESIGN_REPAIR`
+  and `RUN_POST_GRT_RESIZER_TIMING` were turned on for the third build (the
+  slew/cap and setup/hold repairs again after global routing with its
+  parasitics) - and off again after it, see the next bullet.
+* Third build (all of the above with the post-GRT repairs; 2026-10-16)
+  stalled in detailed routing: 2893 violations after 13 iterations, 2848 of
+  them met1/met2 shorts in one 150 x 110 um region at the top left (the
+  debugger's UART and autobaud flops), nothing near the macro or the new
+  straps. No cells overlap; the 1000 "missing route to pin" warnings of the
+  post-GRT steps are the RAM macro's nets and touch 6 violations. That
+  region's rows were 92% full before routing against 88% in the second
+  build (44 more flops and 45 more hold buffers placed there: only the PDN
+  script and the post-GRT steps differ in the configuration, the placement
+  just landed differently). Four router iterations on the build's own
+  states: from the state before the post-GRT repairs 1308 violations in
+  the region instead of 4105 (the repairs add 19 buffers and 60 upsizes
+  and re-legalize, mirroring 9877 instances, after the global route); with
+  the clock tree's 2x-spacing rule removed 3673 (no effect; the router
+  disabling it "to reduce congestion" was a symptom). So
+  `RUN_POST_GRT_DESIGN_REPAIR` / `RUN_POST_GRT_RESIZER_TIMING` are off
+  again (fix4, `harden/trial_fix4.json`), and fix3 (`trial_fix3.json`) adds
+  a site of padding each side of every buffer and delay cell at
+  legalization only (`DPL_CELL_PADDING` 2 with `CELL_PAD_EXCLUDE` naming
+  every other family - OpenROAD matches them with `string match` globs), so
+  the flow's post-placement additions must find room instead of packing
+  the flop clusters. Per-run overlays: `make macro OVERLAY=file.json`.
+  Note the global placement is not deterministic run to run (fix4, the
+  same configuration as fix2 up to routing, placed differently from its
+  first step: that region's rows 90% full instead of 92%), so a build
+  near the threshold is a lottery and the margin has to come from the
+  configuration. fix5 (`trial_fix5.json`) takes the prism route instead:
+  the registers are pinned (DEF FIXED) where the second routed build had
+  them before global placement and released after it
+  (`harden/seq_placement.py` extracts the table from a run's ODB, keyed by
+  the RTL name on each register's Q net - 2327 of 2337 carry one -
+  `odb_anchor_seq.py` / `odb_anchor_release.py` apply it as the
+  `Project.AnchorSequential` / `Project.ReleaseAnchors` steps of flow.py,
+  `ANCHOR_SEQ_TABLE`), so that build's register skeleton is reused and
+  the placer only arranges the logic around it. fix3 was stopped: the
+  padded buffers were legalized far from where the resizers put them (47
+  mm of total displacement at the first legalization, 142 um max), the
+  global route came out at 75% usage with an overflow of 3028 (fix4: 67%,
+  225) and the detailed router was still in its first iteration after 40
+  minutes with 37K violations - padding at legalization is not the lever
+  either. fix2 was stopped at the same time (13 iterations, 2893).
+  fix5's registers were all pinned (2327 found, none moved) but its logic
+  still packed the region to 91.5% - the flop skeleton alone does not
+  carry the reference's logic distribution here. fix6 (`trial_fix6.json`)
+  pins the combinational cells too, prism's part 2: `odb_anchor_cells.py
+  --dump` writes the reference's logic graph with its placement
+  (`placements/macro-fix_final_cells.json`; buffers collapsed, registers
+  keyed by name, every other net keyed by its driver's function and
+  inputs, then a neighbourhood hash for what the exact keys miss) and
+  `ANCHOR_CELLS_TABLE` pins what matches: 18682 of the 18698 logic cells
+  (all registers, 16 combinational cells left to the placer), so the
+  reference placement is replayed and only the flow's buffers are new.
+  fix5 was stopped at routing: with the registers fixed the placer gave
+  the logic a global route of 78% usage and an overflow of 4081 (fix2:
+  69%, 859; fix6: 65%, 81). Results: fix4 routed clean after all (its
+  region had come out at 90%; the router sat on 3 violations from
+  iteration 22 to 40 before clearing them; 91 minutes) and fix6 routed
+  like the reference (clean at iteration 16, 32 minutes for the whole
+  flow). Both: Magic DRC 0 (the pdngen straps did it), LVS clean,
+  antenna clean, IR drop 0.6 mV, hold met at every corner, setup +5.2 ns
+  nominal; the wirelength of fix6 equals the reference's. fix6 is the
+  build to submit and `trial_fix6.json` the recipe (now macro.json's
+  default, `ANCHOR_CELLS_TABLE`): the placement no longer depends on the
+  draw.
+* Open at signoff (both builds), for Ken: setup at the ss corners only
+  (-6.9 ns max_ss, -5.8 nom_ss; nominal and ff are met with 5-6 ns of
+  margin). Every violating path is an exception question, not a
+  physical one: the PC into state registers the `lisa.sdc` PC list does
+  not name (`acc_delayed_val` -7.1, the divider's `cflag` -7.0,
+  `acc_delayed_load` -6.6, `d_we_r` -6.1, `stage_two` / `exec_state`
+  -5.9, `cflag_save` / `signed_inv_save` -5.8, the debugger's `fetch`
+  -5.5, `stg2_state` -5.2, the divider's `op_start` and
+  `lddiv_stage_two` -4.9, `delayed_sp_dec` -3.7), the debugger's `skip_r`
+  into `facc` (16 bits, -6.0), `dbg_we` / `dbg_a` into the divider's
+  `signed_inversion` / `zflag` (-2.6), and `d_addr` / `cl_addr0` into
+  `ra`, `pc`, `ix`, `div_rs1` (-2.4). If a PC-to-state path is
+  two-cycle by construction (the fetch in between), it belongs in the
+  PC list of lisa.sdc; the others need a look at the RTL. The max-slew
+  count at the nominal corner (2.7K nets over 0.75 ns, fanout nets at
+  0.8-2 ns; 12.5K at ss) stays: the post-GRT repairs were the wrong
+  tool (above); `DESIGN_REPAIR_MAX_SLEW_PCT` before placement would be
+  the next one to try, at the cost of more buffers in the dense bins.
 * Found on the way: Yosys names a flattened net after any alias (the
   debugger's data bus is `core_inst_o[*]` in the netlist), the breakpoint
   registers are latches, and OpenSTA's `read_sdc` fails on an exception
