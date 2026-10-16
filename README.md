@@ -42,30 +42,36 @@ test/           cocotb testbench: the DUT with a SPI flash model (firmware.hex),
                 model and a UART on the debug port
 docs/           datasheet (info.md and its figures)
 macros/         the RAM32 DFFRAM macro (GDS, LEF, libs, netlist) of the TT07 chip
-build.py, config.json, pdn_cfg.tcl, odb_power.py, rename_yosys_cells.py
-                the TT07 local OpenLane 2 flow that places that macro
+harden/         the local LibreLane flow: configure.py, flow.py (+ the macro's stripe step),
+                macro.json, the 4x4 floorplan template
 ```
 
 ## Building
 
-`synth.yaml` synthesizes the RTL with Yosys on every push and runs its
-check pass (the structural problems the hardening flow stops on). `gds.yaml`
-(run by hand) hardens the design with LibreLane in the standard Tiny Tapeout
-flow (`tt-gds-action@ttsky26c`), the way the template does: the 128-byte
-RAM is then synthesized from `src/RAM32.v` instead of the DFFRAM macro,
-which fills the 8x2 tile to about 90% and has not placed so far. The TT07
-chip was hardened locally instead, with the macro:
+`harden/` hardens the design on this machine with LibreLane (the GitHub
+runners are an order of magnitude slower than the Mac). It needs a LibreLane
+checkout with its nix dev shell (`LIBRELANE`, default
+`~/projects/tiny_tapeout/librelane`) and the PDK under `PDK_ROOT` (default
+`~/projects/fossi`; `ciel enable --pdk-family sky130 <commit>` with the
+commit `librelane/open_pdks_rev` names), as the DFFRAM.librelane work does:
 
 ```sh
-git clone https://github.com/TinyTapeout/tt-support-tools tt   # the floorplan templates (tt/tech/sky130A/def)
-rm -rf runs && nix-shell ${OPENLANE2_ROOT}/shell.nix --run "python build.py"
+make -C harden            # the standard Tiny Tapeout flow: the RAM synthesized from src/RAM32.v
+make -C harden macro      # with the RAM32 DFFRAM macro (macros/): harden/macro.json places it,
+                          # flow.py runs the tile's power stripes over its met4 pins after the PDN
+make -C harden shell      # the nix shell itself
 ```
 
-(`build.py` still imports OpenLane 2; porting it to LibreLane is a rename of
-the `openlane` package.) Copy the results to `gds/`, `lef/` and `pnl/` and run
-`gds_custom.yaml` by hand to submit them. Which of the two is used for the
-tapeout is still to be decided; the `gds` workflow at least checks that every
-fix synthesizes and closes timing.
+`configure.py` builds `config_merged.json` the way tt-support-tools'
+`--create-user-config` does (the sources, the tile's die area and floorplan
+template from `info.yaml`, over `src/config.json`); results land in
+`harden/runs/<tag>/final/`. For a submission, copy the macro build's GDS,
+LEF and netlist to `gds/`, `lef/` and `pnl/` and run `gds_custom.yaml`.
+
+On GitHub, `synth.yaml` synthesizes the RTL with Yosys on every push and
+runs its check pass (the structural problems the flow stops on); `gds.yaml`
+(run by hand) is the standard flow on the runners; `test.yaml` runs the
+chip-level testbench under icarus.
 
 ## Testing
 
