@@ -38,6 +38,7 @@ def main():
         for s in over.pop("REMOVE_SOURCES", []):
             sources.remove(s)
         cfg.update(over)
+    cfg["DRT_SAVE_DRC_REPORT_ITERS"] = 4        # a DRC report every 4 router iterations (status.py)
     cfg.update({
         "DESIGN_NAME": info["top_module"],
         "VERILOG_FILES": ["dir::../src/" + s for s in sources],
@@ -49,6 +50,13 @@ def main():
     })
     if not os.path.exists(os.path.join(HERE, "tt_block_%s_pg.def" % tiles)):
         sys.exit("harden/tt_block_%s_pg.def is missing: fetch it from tt-support-tools tech/sky130A/def" % tiles)
+    # the template writes its booleans as 0 / 1, which LibreLane's Python API
+    # refuses to convert
+    BOOL_PREFIXES = ("RUN_", "ERROR_ON_", "LINTER_INCLUDE", "DESIGN_REPAIR_", "MAGIC_DEF", "MAGIC_WRITE")
+    BOOL_KEYS = ("GRT_ALLOW_CONGESTION", "FP_PDN_MULTILAYER", "PDN_MULTILAYER", "FP_PDN_CHECK_NODES")
+    for k, v in list(cfg.items()):
+        if type(v) is int and v in (0, 1) and (k.startswith(BOOL_PREFIXES) or k in BOOL_KEYS):
+            cfg[k] = bool(v)
     cfg = {k: v for k, v in cfg.items() if k != "//"}
     out = os.path.join(HERE, "config_merged.json")
     with open(out, "w", encoding="utf8") as f:

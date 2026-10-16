@@ -25,10 +25,22 @@ standard:
 macro:
 	$(NIX_RUN) "python3 configure.py --macro && python3 flow.py --macro macro-$(TAG)"
 
+# Where is the run (the newest under runs/, or RUN=runs/<tag>): the steps
+# done and their durations, the current step's log tail, and once the
+# detailed router runs its iterations and the newest DRC report (by layer,
+# type, densest bins, nets).  harden-stop kills a router that will not
+# converge; the flow fails there and the report on disk is the one to read.
+RUN ?=
+status:
+	python3 status.py $(RUN)
+
+harden-stop:
+	python3 status.py $(RUN) --stop
+
 shell:
 	nix-shell $(LIBRELANE)/shell.nix
 
 clean:
 	rm -rf runs config_merged.json
 
-.PHONY: standard macro shell clean
+.PHONY: standard macro status harden-stop shell clean
