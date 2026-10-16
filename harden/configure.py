@@ -33,6 +33,10 @@ def main():
     tiles = info["tiles"]
     sources = list(info["source_files"])
     cfg = load_json(os.path.join(ROOT, "src", "config.json"))
+    # src/config.json's dir:: paths are relative to src/; config_merged.json lives here
+    for k, v in cfg.items():
+        if isinstance(v, str) and v.startswith("dir::"):
+            cfg[k] = "dir::../src/" + v[5:]
     if macro:
         over = load_json(os.path.join(HERE, "macro.json"))
         for s in over.pop("REMOVE_SOURCES", []):

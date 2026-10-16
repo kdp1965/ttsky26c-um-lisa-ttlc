@@ -21,6 +21,10 @@
 
   "CLOCK_PORT": "clk",
 
+  "//": "The core's multi-cycle paths (PC to the registers decode reaches): lisa.sdc = LibreLane's base.sdc plus those",
+  "PNR_SDC_FILE": "dir::lisa.sdc",
+  "SIGNOFF_SDC_FILE": "dir::lisa.sdc",
+
   "SYNTH_STRATEGY": "AREA 1",
 
   "//": "Configuration docs: https://librelane.readthedocs.io/en/latest/reference/configuration.html",
