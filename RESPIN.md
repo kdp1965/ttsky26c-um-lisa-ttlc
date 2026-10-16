@@ -286,6 +286,29 @@ for loading code). By design; keep, and keep it out of the debuggers' polls
   the plain `adc`/`sub`/`cmp` forms, the 16-bit divider result without the
   mask), `ldamode` in the assembler and simulator, and the ISA document.
 
+## Hardening (harden/, 2026-10-15 ..)
+
+* The tile is 4x4 (the 8x2 of TT07 was too small with the RAM synthesized:
+  ~90% utilization, detailed placement failed); placement density 85.
+  `make -C harden` is the standard flow (RAM from `src/RAM32.v`), `make -C
+  harden macro` places the RAM32 DFFRAM macro (`macro.json`) and runs the
+  tile's power stripes over its met4 pins after the PDN.
+* Timing: TT07 was constrained at 30 ns (`impl.sdc`, not the 20 ns in its
+  config.json) and `src/lisa.sdc` keeps that and TT07's multi-cycle
+  exceptions - from the PC, the instruction cache line (`cl_valid`,
+  `cl_addr0`), the breakpoint latches, the debugger's address, data, write,
+  halted and continue registers, the pre-decode state and `d_we_r`, to the
+  registers decode writes (PC, IX, RA, IA, SP, cond, ie, isr_jump, facc, the
+  divider's operands and flags). At 20 ns with only the PC exceptions the
+  resizer repaired at the slow corner from -18 ns and detailed placement
+  then failed (DPL-0036); the worst path after CTS was `cl_addr0` to `facc`,
+  one of the missing exceptions.
+* Found on the way: Yosys names a flattened net after any alias (the
+  debugger's data bus is `core_inst_o[*]` in the netlist), the breakpoint
+  registers are latches, and OpenSTA's `read_sdc` fails on an exception
+  command whose text holds an inline `[expr {...}]` (it takes the command
+  text as a list to record the SDC line).
+
 ## Decisions (Ken, 2026-10-15)
 
 * 8, the divider: whatever gives the most efficient code, with a compiler

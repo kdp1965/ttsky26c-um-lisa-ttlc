@@ -68,6 +68,19 @@ template from `info.yaml`, over `src/config.json`); results land in
 `harden/runs/<tag>/final/`. For a submission, copy the macro build's GDS,
 LEF and netlist to `gds/`, `lef/` and `pnl/` and run `gds_custom.yaml`.
 
+The timing constraints are `src/lisa.sdc`: LibreLane's `base.sdc` (the
+clock from `CLOCK_PERIOD`, 30 ns as the TT07 build was constrained - its
+`impl.sdc` overrode the 20 ns of its config; the chip runs at 66 MHz) plus
+the core's multi-cycle paths, the set TT07 closed with: what the PC, the
+instruction cache line, the breakpoint latches and the debugger's registers
+reach is written two or three clocks later. The registers are found through
+their Q nets (the cells are numbered), so there is no netlist renaming step;
+every STA log opens with `lisa.sdc: pc 15 cl_valid 1 cl_addr 15 brk 96 ...`,
+the registers each group resolved to, and a group that resolves to nothing
+is reported (Yosys names a flattened net after any of its aliases: the
+debugger's data register came out as `core_inst_o`). `make -C harden status
+RUN=runs/<tag>` shows a run's steps and the router's progress.
+
 On GitHub, `synth.yaml` synthesizes the RTL with Yosys on every push and
 runs its check pass (the structural problems the flow stops on); `gds.yaml`
 (run by hand) is the standard flow on the runners; `test.yaml` runs the
