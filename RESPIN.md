@@ -491,6 +491,26 @@ for loading code). By design; keep, and keep it out of the debuggers' polls
   0.8-2 ns; 12.5K at ss) stays: the post-GRT repairs were the wrong
   tool (above); `DESIGN_REPAIR_MAX_SLEW_PCT` before placement would be
   the next one to try, at the cost of more buffers in the dense bins.
+* First submission (fix6's GDS through `gds_custom.yaml`, 2026-10-16): the
+  GDS job passed, Tiny Tapeout's precheck failed its pin check - "Port VGND
+  is too far from bottom edge of module: 154.12 > 10 um", six power port
+  boxes. pdngen cuts its stripes around the macro (its straps on the pin
+  columns start above the halo, and so do the two tile stripes that pass
+  within its clearance of a macro pin, 291.17 and 368.91 um), and each cut
+  stripe is also a box of the tile's power port; the extension step's
+  full-height boxes sat beside them in the DEF but Magic's LEF kept the cut
+  ones. The GDS itself was whole (one full-height met4 polygon on every
+  pin column). `odb_stripes.py` now replaces every met4 power pin box
+  shorter than the core with a full-height one and completes the stripe
+  over the macro (same net on the pin columns; the 368.91 tile stripe
+  passes the VGND pin at 0.37 um, met4 spacing is 0.30); fix7 is the
+  rebuild: 25 minutes, routed clean, Magic DRC 0, LVS clean, antenna
+  clean, IR drop 0.6 mV, hold met, setup +5.2 ns nominal (-7.4 at ss,
+  the same exception questions), and its LEF's 39 power port boxes all
+  reach both edges. (pdngen's own PSM-0069 "check connectivity failed"
+  in the GeneratePDN log is expected: it runs before the extension step
+  bridges to the macro pins; the IR-drop step then reports every shape
+  connected.) fix7's GDS, LEF and netlist are the submission.
 * Found on the way: Yosys names a flattened net after any alias (the
   debugger's data bus is `core_inst_o[*]` in the netlist), the breakpoint
   registers are latches, and OpenSTA's `read_sdc` fails on an exception

@@ -82,7 +82,9 @@ this tile (its global route needs 128-144% of the met1-met4 resources).
 `make -C harden macro TILES=8x2` tries the macro flow on the TT07 tile.
 `harden/pdn_macro.tcl` is the macro flow's PDN: the tile's, plus a stripe on
 each macro power pin column that is not on a tile stripe (`odb_stripes.py`
-then runs the columns over the macro). `EXTRA_EXCLUDED_CELLS` in
+then runs the columns over the macro and makes every power pin box pdngen
+cut around the macro full height again: Tiny Tapeout's precheck wants each
+power port box to reach both edges of the tile). `EXTRA_EXCLUDED_CELLS` in
 src/config.json keeps the resizer off the sky130 delay cells, which it
 otherwise takes as its fanout buffer. `harden/trial_*.json` are per-run
 overlays (`OVERLAY=`), the trials RESPIN.md's Hardening section describes.
