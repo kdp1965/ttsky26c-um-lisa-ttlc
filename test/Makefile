@@ -74,10 +74,15 @@ TOPLEVEL = tb
 COCOTB_TEST_MODULES = test
 MODULE = test
 
+# make TTLC=1: the TTLC loopback through the testbench's I/O chains
 # A program from the SDCC test suite (or any Intel HEX / @addr / opcode-per-line
 # image): make IHX=<file> [CACHE=1] [SPI=1] [TIMEOUT=<clocks of silence>] [DUMP=1]
 ifeq ($(IHX),)
+ifneq ($(TTLC),)
+PLUSARGS += +FIRMWARE=$(PWD)/progs/ttlc_test.hex +PROGRAM=ttlc_test.hex +TTLC
+else
 PLUSARGS += +FIRMWARE=$(PWD)/progs/hello.hex +PROGRAM=hello.hex +DEFAULT
+endif
 else
 FIRMWARE = $(PWD)/$(SIM_BUILD)/$(notdir $(basename $(IHX))).hex
 PLUSARGS += +FIRMWARE=$(FIRMWARE) +PROGRAM=$(notdir $(IHX))

@@ -58,7 +58,6 @@ module mc14500b
    reg                  r_flagO;
    reg                  r_flagF;
    reg                  r_sto1;
-   reg                  r_sto2;
    reg                  r_run;
    reg                  r_stall;
 
@@ -258,50 +257,19 @@ module mc14500b
 
    /*
    ================================================================================
-   Implement the Write control register 1
+   The WRITE strobe: high from the falling edge that latches a sto / stoc to
+   the next one, so ttlc_io, sampling on the rising edge, sees it exactly
+   once.  (TT07 made the same pulse from two flops resetting each other
+   asynchronously, which the LibreLane flow's Yosys check reports as a logic
+   loop.)
    ================================================================================
    */
-   reg  r_sto2_n;
-   always @*
-`ifdef SIMULATION
-      r_sto2_n = #5 ~r_sto2;
-`else
-      r_sto2_n = ~r_sto2;
-`endif
-
-   always @(negedge clk or negedge r_sto2_n)
+   always @(negedge clk)
    begin
-      if (~r_sto2_n)
+      if (RST)
          r_sto1 <= 1'b0;
       else
-      begin
-         if (RST)
-            r_sto1 <= 1'b0;
-
-         // Allow updates only if the processor is running
-         else if (r_run & !r_stall)
-         begin
-            // Test for incomming sto or stoc
-            if (inst_in == 4'h8 || inst_in == 4'h9)
-               r_sto1 <= 1'b1;
-         end
-      end
-   end
-
-   /*
-   ================================================================================
-   Implement the Write control register 2
-   ================================================================================
-   */
-   always @(posedge clk or negedge r_sto1)
-   begin
-      if (~r_sto1)
-         r_sto2 <= 1'b0;
-      else
-      begin
-         // Simply capture the r_sto1 value
-         r_sto2 <= r_sto1;
-      end
+         r_sto1 <= r_run & !r_stall & (inst_in == 4'h8 || inst_in == 4'h9);
    end
 
 `ifdef SIMULATION

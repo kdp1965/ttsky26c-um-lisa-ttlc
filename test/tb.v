@@ -19,8 +19,12 @@ module tb
    output wire          rx_avail,
    input  wire  [1:0]   uart_port_sel,
    input  wire  [7:0]   porta_in,
-   output wire  [7:0]   porta_out
+   output wire  [7:0]   porta_out,
+   input  wire          ttlc_mode,          // ui_in[6:4] from the input chains
+   input  wire  [47:0]  ttlc_in,            // the 48 inputs on the 74HC165 chains
+   output wire  [47:0]  ttlc_out            // the 48 outputs on the 74HC595 chains
 );
+   wire     [2:0] ttlc_din;
 
    reg            clk = 1'b0;
    always #10 clk = ~clk;
@@ -155,11 +159,28 @@ module tb
    assign baud_div = 7'd8;      // = ui_in[6:0] with bit 3 (the RX pin, idle high) set
 
    // ==========================================================================
-   // Assign the port I/O
+   // Assign the port I/O; with ttlc_mode the input chains drive ui_in[6:4]
    // ==========================================================================
    assign porta_out = uo_out;
    assign ui_in[2:0] = porta_in[2:0];
-   assign ui_in[7:4] = porta_in[7:4];
+   assign ui_in[7]   = porta_in[7];
+   assign ui_in[6:4] = ttlc_mode ? ttlc_din : porta_in[6:4];
+
+   // ==========================================================================
+   // The TTLC's I/O Pmod: three 74HC595 chains (16 outputs each: data on
+   // uo_out[2:0], shift clock uo_out[6], the output latch on uo_out[5]'s
+   // rising edge) and three 74HC165 chains (16 inputs each, loaded while
+   // the latch is low, the serial output into ui_in[6:4])
+   // ==========================================================================
+   ttlc_chains i_chains
+   (
+      .sclk    ( uo_out[6]    ),
+      .latch   ( uo_out[5]    ),
+      .dout    ( uo_out[2:0]  ),
+      .din     ( ttlc_din     ),
+      .inputs  ( ttlc_in      ),
+      .outputs ( ttlc_out     )
+   );
    
    // ==========================================================================
    // Instantiate a SPI flash
@@ -191,3 +212,48 @@ module tb
 
 endmodule
 
+
+
+// The 74HC595 / 74HC165 chains of the TTLC Pmod, 16 stages each.
+module ttlc_chains
+(
+   input  wire          sclk,
+   input  wire          latch,
+   input  wire [2:0]    dout,          // into the 595 chains
+   output wire [2:0]    din,           // out of the 165 chains
+   input  wire [47:0]   inputs,
+   output reg  [47:0]   outputs
+);
+   reg [15:0] sr595[0:2];
+   reg [15:0] sr165[0:2];
+   integer    k;
+   initial
+   begin
+      outputs = 48'h0;
+      for (k = 0; k < 3; k = k + 1)
+      begin
+         sr595[k] = 16'h0;
+         sr165[k] = 16'h0;
+      end
+   end
+   // 595: shift on the rising edge, the first bit in ends up at stage 15
+   always @(posedge sclk)
+      for (k = 0; k < 3; k = k + 1)
+         sr595[k] <= {sr595[k][14:0], dout[k]};
+   // the outputs latch on the rising edge of the latch pin
+   always @(posedge latch)
+      outputs <= {sr595[2], sr595[1], sr595[0]};
+   // 165: parallel load while the latch (/PL) is low, else shift on the rising
+   // edge; the serial output is stage 15
+   always @(posedge sclk or negedge latch)
+      if (!latch)
+      begin
+         sr165[0] <= inputs[15:0];
+         sr165[1] <= inputs[31:16];
+         sr165[2] <= inputs[47:32];
+      end
+      else
+         for (k = 0; k < 3; k = k + 1)
+            sr165[k] <= {sr165[k][14:0], 1'b0};
+   assign din = {sr165[2][15], sr165[1][15], sr165[0][15]};
+endmodule

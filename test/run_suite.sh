@@ -4,7 +4,7 @@
 # testbench; one line per program, PASS/FAIL.
 where=${1:-chip}
 shift
-SDCC_TEST=${SDCC_TEST:-$(dirname "$0")/../../lisa-tools/sdcc_test}
+SDCC_TEST=${SDCC_TEST:-$(cd "$(dirname "$0")/../../lisa-tools/sdcc_test" && pwd)}
 SELFCHECK="test_core test_negate test_union test_varargs test_digits test_signed test_strs test_regress test_pfu test_loop test_bigframe test_irq test_irq2 test_divsh test_divl test_bf16 test_bf16f test_ptroff test_rot test_index test_vshift"
 CACHE_TESTS="test_cacherm test_cachermw test_cachepush test_cachewb test_cacheseq test_cacheloop test_cacheperiph"
 case "$*" in *CACHE=1*) list="$CACHE_TESTS test_ptroff test_bigframe";; *) list="$SELFCHECK";; esac

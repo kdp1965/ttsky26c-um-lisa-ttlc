@@ -324,6 +324,10 @@ module tt_um_lisa
    reg  [12:0]          mc14500_stack[3:0];
    (* keep = "true" *)
    wire                 ttlc_halt;
+   wire                 ttlc_exec;
+   reg                  mc14500_run_r;
+   reg                  mc14500_run_rr;
+   wire                 mc14500_pcen;
    wire                 ttlc_reset;
    wire                 ttlc_shiftclk;
    wire                 DATA;
@@ -867,6 +871,7 @@ module tt_um_lisa
 
       // TTLC Debug signals
       .ttlc_pc                   ( mc14500_pc                ),
+      .ttlc_exec                 ( ttlc_exec                 ),
       .ttlc_halt                 ( ttlc_halt                 ),
       .ttlc_reset                ( ttlc_reset                ),
       .ttlc_shiftclk             ( ttlc_shiftclk             ),
@@ -1012,18 +1017,24 @@ module tt_um_lisa
          mc14500_stack[2] <= 13'h0;
          mc14500_stack[3] <= 13'h0;
          io_busy_r        <= 1'b0;
+         mc14500_run_r    <= 1'b0;
+         mc14500_run_rr   <= 1'b0;
       end
       else
       begin
          io_busy_r        <= io_busy;
 
-         // Only update if we are running
-         if (mc14500_run)
+         mc14500_run_r    <= mc14500_run;
+         mc14500_run_rr   <= mc14500_run_r;
+         // A jump, return or nopf changes the PC in the clock(s) after its
+         // fetch: let it land although the fetch has just been halted (the
+         // debugger's step, a breakpoint), as a free run would.  TT07 gated
+         // it on the fetch's run and lost it when a halt fell between.
          begin
             // The FLAG_F signal resets the PC
-            if (FLAG_F)
+            if (mc14500_pcen && FLAG_F)
                mc14500_pc <= 12'h0;
-            else if (JMP)
+            else if (mc14500_pcen && JMP)
             begin
                // Save the PC from the instruction
                mc14500_pc <= address;
@@ -1038,7 +1049,7 @@ module tt_um_lisa
                //       then we need to implement a "deep" stack by
                //       pushing to QSPI and restoring later.
             end
-            else if (RTN)
+            else if (mc14500_pcen && RTN)
             begin
                // Pop mc14500_pc from the "stack"
                mc14500_pc       <= mc14500_stack[0][11:0];
@@ -1049,7 +1060,7 @@ module tt_um_lisa
                // TODO: Test if QSPI contains stack items. If it does
                //       then we need to restore from QSPI.
             end
-            else if (ttlc_i_ready)
+            else if (mc14500_run && ttlc_i_ready)
                mc14500_pc <= mc14500_pc + 1;
          end
       end
@@ -1110,6 +1121,10 @@ module tt_um_lisa
    assign ttlc_i_fetch = !ttlc_halt;
    assign ttlc_i_addr  = mc14500_pc;
    assign mc14500_run  = ttlc_i_ready && !io_busy && !io_busy_r && !ttlc_halt && !FLAG_O;
+   // the fetch of an instruction (the debugger's step ends after one); its
+   // PC change may land in the two clocks after
+   assign ttlc_exec    = mc14500_run && ttlc_i_ready;
+   assign mc14500_pcen = mc14500_run | mc14500_run_r | mc14500_run_rr;
 
    // ==========================================================================
    // I/O for the MC14500B

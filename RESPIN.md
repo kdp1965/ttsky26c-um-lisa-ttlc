@@ -23,8 +23,8 @@ the list for this revision: what the silicon does, where it is in the RTL
 | 9  | A breakpoint halt right after a store drops the store and writes RAM[IX] | `lisa_dbg.v` 433-442, `lisa_core.v` 670, 714 | fixed: test_bp_after_store |
 | 10 | The debugger's single step does nothing | `lisa_dbg.v` 441, core pre-decode | fixed: test_single_step |
 | 11 | Debugger RAM reads return RAM[IX] with the cache off | `data_cache8.v` 223, core `dbg_ready` | fixed: test_debug_port |
-| 12 | TTLC input scan shifts 17 times (every input one position high, bit 15/31/47 lost) | `shift_reg_io.v` 126-160 | fixed in RTL; chain model test to do |
-| 13 | TTLC: latch pulse cannot load a 74HC166; step bit cannot work; breakpoints one late from the instruction cache | `shift_reg_io.v`, `mc14500b.v`, `ttlc_inst_cache.v` | open |
+| 12 | TTLC input scan shifts 17 times (every input one position high, bit 15/31/47 lost) | `shift_reg_io.v` 126-160 | fixed: test_ttlc |
+| 13 | TTLC: latch pulse cannot load a 74HC166; step bit cannot work; breakpoints one late from the instruction cache | `shift_reg_io.v`, `mc14500b.v`, `ttlc_inst_cache.v` | step and breakpoints fixed: test_ttlc_debug; the 166 latch kept as is |
 | 14 | Console UART holds one received byte: characters lost at flash fetch speed | `lisa_uart.v` / `lisa_rx8n.v` | done: test_uart_burst |
 | 15 | Reading debug register 0xf advances PC | `lisa_dbg.v` | kept |
 
@@ -228,15 +228,25 @@ and 48 inputs); then the Commander's 16-sample mode on the chip.
 ## 13. TTLC: latch, step, breakpoints
 
 * The latch pulse is low with the shift clock still; a 74HC166 loads only on a
-  clock edge while /PE is low (a 74HC165's /PL is asynchronous). Fix: one
-  shift clock during the latch pulse, so both parts work. Verify in the chain
-  model.
-* `ttlc_halt = !run | step` blocks the fetch whose `ttlc_i_ready` would clear
-  `step`, so the TTLC step bit cannot work. Fix as 10.
-* The TTLC breakpoint compare runs a clock behind the fetch when the next
-  instruction is already in the single 4-word cache, so it stops one
-  instruction late and a `jmp`/`rtn`/`nopf` executed in that clock loses its
-  PC effect. Fix: compare on the fetched PC before execute.
+  clock edge while /PE is low (a 74HC165's /PL is asynchronous). Left as it
+  is: a clock pulse inside the latch window would be a 17th edge to every
+  existing emulator and Pmod, and the Pmods use the 165.
+* `ttlc_halt = !run | step` blocked the fetch whose `ttlc_i_ready` would clear
+  `step`. Now (`debug_regs.v`) the step lifts the halt until one fetch
+  (`ttlc_exec`, from `tt_um_lisa.v`), then clears run; a run or step written
+  passes a breakpoint on the current PC (`ttlc_skip`).
+* The breakpoint compare used to clear `run` a clock after the PC reached the
+  address; now `ttlc_halt` is combinational on the match, so the TTLC halts
+  with the PC at the breakpoint, before its instruction. And the PC change of
+  a `jmp`/`rtn`/`nopf` lands in the clock(s) after its fetch even when the
+  fetch was the last one allowed (`mc14500_pcen` = run or its two delayed
+  copies): a stepped jump jumps. test_ttlc_debug: a breakpoint at 5 halts at
+  5 twice round the loop, three steps go 6, 7, 8, stepping round the loop
+  comes back to 0 through the nopf.
+* `mc14500b.v`'s WRITE strobe was two flops resetting each other
+  asynchronously, which the LibreLane flow's Yosys check reported as a logic
+  loop (the first GDS run of this repository failed on it); it is one
+  falling-edge flop now, with the same timing (test_ttlc writes through it).
 
 ## 14. Console UART receive buffer
 
@@ -252,26 +262,29 @@ Any access to the "current opcode" register increments PC (`dbg_inc`, meant
 for loading code). By design; keep, and keep it out of the debuggers' polls
 (documented in the Commander README).
 
-## Verification plan
+## Verification (test/, see test/README.md)
 
-1. Unit testbenches where an item is local: `fops` (4) against a Python
-   bfloat16 reference, the ALU flags (7) exhaustively, `shift_reg_io` (12,
-   13) with a chain model, the cache (1, 2) with the SPI RAM model and a
-   scoreboard.
-2. Program-level: a cocotb test that loads an `sdcc_test` `.ihx` into the
-   flash model, sets the debug registers over the UART as `hw_test.mjs` does
-   (flash in SPI, cache off or on through the RAM model on CE1), grants the
-   UART to the program and checks its output for `ALL PASSED`. The suite's
-   probes (`test_cacherm`, `test_cachermw`, `test_divprobe`, `test_bf16`,
-   `test_irqhaz`) are the regression for 1-8; the whole suite is the
-   acceptance run (slow under icarus: run the short programs in CI, the rest
-   by hand or under Verilator).
-3. `lisa_sim` gets a "rev 2" mode (the fixed semantics) so the compiler's
-   test suite has a fast reference; `sdcc -mlisa` keeps the TT07 sequences
-   (correct on both) and gains `--reti` and the simpler sequences as options.
-4. The fixes change nothing in the debugger protocol, so lisa_ide and the
-   Commander serve both chips; the Commander's 17-sample TTLC emulation and
-   the debuggers' safe-stop logic become unnecessary on rev 2 but stay.
+* `test/core/`: tb_core.v, the core with the chip's registered data bus, the
+  8-line cache, the RAM32 (write-first, as the DFFRAM macro reads), the QSPI
+  sequencer with a QSPI RAM model on CE1 and the peripherals; instructions
+  straight from an array, the debug port driven from Python. `make
+  IHX=<prog.ihx> [CACHE=1]` runs a program to ALL PASSED; `make
+  IHX=../progs/dbg.ihx` runs the debugger tests (breakpoint after a store,
+  single step, halt / resume, RAM reads); `irq3` with `TRACEPC=` /
+  `TRACEWIN=` prints a non-intrusive trace.
+* `test/`: tb.v, the whole chip with a flash model (the image from
+  `+FIRMWARE=`), a QSPI RAM on CE1, the debug UART and the TTLC's three
+  74HC595 / 74HC165 chains. `make` runs the debugger, hello's banner and a
+  burst of characters; `make TTLC=1` the loopback through the chains and the
+  TTLC's breakpoints and step; `make IHX=<prog.ihx>` a program through the
+  SPI fetch (Verilator: test_core in 10 s).
+* `test/fops/`: fadd and fmul against an exact bfloat16 reference.
+* `test/progs/`: the probe programs built by `sdcc -mlisa`, the `.hex`
+  committed. `test/run_suite.sh [core|chip] [CACHE=1]` runs the SDCC suite.
+* Still to do on the toolchain side: a `lisa_sim` mode for these semantics,
+  `sdcc -mlisa`'s option for the shorter sequences (`ret #imm8` constants,
+  the plain `adc`/`sub`/`cmp` forms, the 16-bit divider result without the
+  mask), `ldamode` in the assembler and simulator, and the ISA document.
 
 ## Decisions (Ken, 2026-10-15)
 

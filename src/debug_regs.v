@@ -96,6 +96,7 @@ module debug_regs
    output wire [1:0]          clk_div,
 
    input  wire [11:0]         ttlc_pc,
+   input  wire                ttlc_exec,        // the TTLC retires an instruction (its PC moves)
    output wire                ttlc_halt,
    output reg                 ttlc_reset,
    output reg                 ttlc_shiftclk,
@@ -113,6 +114,8 @@ module debug_regs
    wire [12:0] ttlc_brk_addr2;
    reg         ttlc_step;
    reg         ttlc_run;
+   reg         ttlc_skip;        // run / step written: the breakpoint at this PC is passed
+   wire        ttlc_brk;
    wire        dbg_addr_12;
    wire        dbg_addr_13;
    wire        dbg_addr_1b;
@@ -416,6 +419,7 @@ module debug_regs
 //         ttlc_brk_addr1    <= 12'hfff;
          ttlc_run          <= 1'b0;
          ttlc_step         <= 1'b0;
+         ttlc_skip         <= 1'b0;
       end
       else
       begin
@@ -460,7 +464,12 @@ module debug_regs
          if (dbg_a[7:4] == 4'h4 && dbg_we)
          begin
             case (dbg_a[3:0])    
-            4'h0: {ttlc_shiftclk, ttlc_reset, ttlc_step, ttlc_run} <= dbg_di[3:0];
+            4'h0: begin
+                     // bit 0 run, bit 1 step: one instruction, then halted;
+                     // either passes a breakpoint on the current PC
+                     {ttlc_shiftclk, ttlc_reset, ttlc_step, ttlc_run} <= dbg_di[3:0];
+                     ttlc_skip <= dbg_di[0] | dbg_di[1];
+                  end
 //            4'h8: ttlc_brk_addr0 <= dbg_di[11:0];
 //            4'h9: ttlc_brk_addr1 <= dbg_di[11:0];
             default:
@@ -469,16 +478,22 @@ module debug_regs
          end
          else
          begin
-            if ((ttlc_brk_addr0 == {1'b1, ttlc_pc} ||
-                 ttlc_brk_addr1 == {1'b1, ttlc_pc} ||
-                 ttlc_brk_addr2 == {1'b1, ttlc_pc}
-                 ) && !ttlc_step)
+            // an instruction retired: the step is done (TT07's step bit held
+            // the fetch it needed to clear itself), the breakpoint passed
+            if (ttlc_exec)
             begin
-               ttlc_run <= 1'b0;
+               ttlc_skip <= 1'b0;
+               if (ttlc_step)
+               begin
+                  ttlc_step <= 1'b0;
+                  ttlc_run  <= 1'b0;
+               end
             end
 
-            if (ttlc_i_ready)
-               ttlc_step <= 1'b0;
+            // a breakpoint halts before its instruction (ttlc_halt below);
+            // TT07 compared a clock behind the fetch and stopped one late
+            if (ttlc_brk && !ttlc_skip && !ttlc_step)
+               ttlc_run <= 1'b0;
          end
       end
    end
@@ -552,7 +567,10 @@ module debug_regs
 `endif
    end
 
-   assign ttlc_halt = !ttlc_run | ttlc_step;
+   assign ttlc_brk  = ttlc_brk_addr0 == {1'b1, ttlc_pc} ||
+                      ttlc_brk_addr1 == {1'b1, ttlc_pc} ||
+                      ttlc_brk_addr2 == {1'b1, ttlc_pc};
+   assign ttlc_halt = !(ttlc_run | ttlc_step) | (ttlc_brk & !ttlc_skip & !ttlc_step);
 
 endmodule
 
