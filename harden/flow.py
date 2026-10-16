@@ -6,7 +6,8 @@ DFFRAM macro is in the design and one extra step runs the tile's vertical
 power stripes across its pin columns after the PDN is generated (the
 single-layer tile PDN does not reach a macro's pins by itself).
 
-    python3 flow.py [--macro] [tag]        inside the LibreLane nix shell, PDK_ROOT set
+    python3 flow.py [--macro] [--to=Step.Id] [tag]   inside the LibreLane nix shell, PDK_ROOT set
+                                           (--to=Yosys.Synthesis: synthesis only, `make synth`)
 """
 import json
 import os
@@ -34,13 +35,14 @@ class MacroFlow(Classic):
 
 def main():
     macro = "--macro" in sys.argv
+    to = next((a.split("=", 1)[1] for a in sys.argv if a.startswith("--to=")), None)
     args = [a for a in sys.argv[1:] if not a.startswith("--")]
     merged = "config_merged_macro.json" if macro else "config_merged.json"
     cfg = json.load(open(os.path.join(HERE, merged), encoding="utf8"))
     cfg["PDK"] = "sky130A"
     flow_class = MacroFlow if macro else Classic
     flow = flow_class(cfg, design_dir=HERE, pdk_root=os.environ["PDK_ROOT"])
-    flow.start(tag=args[0] if args else None)
+    flow.start(tag=args[0] if args else None, **({"to": to} if to else {}))
 
 
 if __name__ == "__main__":

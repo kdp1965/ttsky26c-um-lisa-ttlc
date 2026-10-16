@@ -30,6 +30,9 @@
 
   "SYNTH_STRATEGY": "AREA 1",
 
+  "//": "SYNTH_EXCLUDED_CELL_FILE - the PDK's no_synth.cells keeps synthesis off nearly every _1 logic cell and flop (199 entries), so the design maps to _2 cells and comes out ~25% larger than TT07's build (OpenLane 2, 2024 PDK), which used them. src/no_synth.cells is the PDK list without the _1 combinational cells and plain flops; the clock, delay, scan and latch cells stay excluded.",
+  "SYNTH_EXCLUDED_CELL_FILE": "dir::no_synth.cells",
+
   "//": "Configuration docs: https://librelane.readthedocs.io/en/latest/reference/configuration.html",
 
   "//": "!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!",

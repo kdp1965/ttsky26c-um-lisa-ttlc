@@ -303,6 +303,18 @@ for loading code). By design; keep, and keep it out of the debuggers' polls
   resizer repaired at the slow corner from -18 ns and detailed placement
   then failed (DPL-0036); the worst path after CTS was `cl_addr0` to `facc`,
   one of the missing exceptions.
+* Area: the design is TT07's size (a hierarchical Yosys synthesis of both:
+  184.6K against 192.4K um2; the growth is the two UART receive FIFOs, +2.8K
+  each, and the new fadd, +0.6K), but LibreLane synthesized it to 229K
+  because this PDK's `no_synth.cells` excludes nearly every `_1` logic cell
+  and flop; TT07's build used them (its layout netlist is 24K `_1` cells of
+  35K). With `src/no_synth.cells` (the PDK list without the `_1`
+  combinational cells and plain flops) synthesis gives 178K. Before that,
+  both flavours sat near 80% utilization before any repair, and the flow's
+  hold buffers, setup buffers and antenna diodes pushed a full edge over:
+  detailed placement failed on a few cells after the post-CTS resizer (the
+  pocket beside the macro; PL_MAX_DISPLACEMENT_Y 300 lets cells leave it)
+  and, for the standard flow, at diode insertion.
 * Found on the way: Yosys names a flattened net after any alias (the
   debugger's data bus is `core_inst_o[*]` in the netlist), the breakpoint
   registers are latches, and OpenSTA's `read_sdc` fails on an exception

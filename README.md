@@ -81,6 +81,15 @@ is reported (Yosys names a flattened net after any of its aliases: the
 debugger's data register came out as `core_inst_o`). `make -C harden status
 RUN=runs/<tag>` shows a run's steps and the router's progress.
 
+`src/no_synth.cells` is the synthesis exclusion list (`SYNTH_EXCLUDED_CELL_FILE`).
+The PDK's own list keeps synthesis off nearly every `_1` logic cell and flop,
+which maps the design to `_2` cells and makes it about a quarter larger than
+TT07's build (OpenLane 2 on the 2024 PDK, which used the `_1` cells; 229K
+against 178K um2 synthesized here). The project list is the PDK's without the
+`_1` combinational cells and plain flops; clock, delay, scan and latch cells
+stay excluded. `make -C harden synth` runs synthesis alone to check the
+area (`runs/synth-<tag>/*-yosys-synthesis/reports/stat.json`).
+
 On GitHub, `synth.yaml` synthesizes the RTL with Yosys on every push and
 runs its check pass (the structural problems the flow stops on); `gds.yaml`
 (run by hand) is the standard flow on the runners; `test.yaml` runs the

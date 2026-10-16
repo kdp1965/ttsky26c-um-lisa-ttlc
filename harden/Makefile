@@ -3,6 +3,7 @@
 #
 #   make            # the standard Tiny Tapeout flow: the RAM synthesized from src/RAM32.v
 #   make macro      # with the RAM32 DFFRAM macro (macro.json, the stripe step of flow.py)
+#   make synth      # synthesis only (runs/synth-<tag>/*-yosys-synthesis/reports): area, cell types
 #   make clean
 #
 # LibreLane and the tools come from the dev shell of a LibreLane checkout
@@ -24,6 +25,9 @@ standard:
 
 macro:
 	$(NIX_RUN) "python3 configure.py --macro && python3 flow.py --macro macro-$(TAG)"
+
+synth:
+	$(NIX_RUN) "python3 configure.py && python3 flow.py --to=Yosys.Synthesis synth-$(TAG)"
 
 # Where is the run (the newest under runs/, or RUN=runs/<tag>): the steps
 # done and their durations, the current step's log tail, and once the
