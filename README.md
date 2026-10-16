@@ -57,7 +57,7 @@ which fills the 8x2 tile to about 90% and has not placed so far. The TT07
 chip was hardened locally instead, with the macro:
 
 ```sh
-git clone -b ttsky25a https://github.com/TinyTapeout/tt-support-tools tt   # the floorplan templates
+git clone https://github.com/TinyTapeout/tt-support-tools tt   # the floorplan templates (tt/tech/sky130A/def)
 rm -rf runs && nix-shell ${OPENLANE2_ROOT}/shell.nix --run "python build.py"
 ```
 

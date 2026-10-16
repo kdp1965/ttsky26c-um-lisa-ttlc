@@ -21,7 +21,7 @@
   "SIGNOFF_SDC_FILE": "src/impl.sdc",
 
   "FP_PDN_CHECK_NODES": false,
-  "FP_PDN_VOFFSET": 66.32,
+  "FP_PDN_VOFFSET": 287.38,
   "FP_PDN_CFG": "pdn_cfg.tcl",
   "MAGIC_LEF_WRITE_USE_GDS": true,
   "MAGIC_WRITE_LEF_PINONLY": true,
@@ -30,7 +30,7 @@
     "RAM32": {
       "instances": {
         "ram1": {
-          "location": [971.6, 10],
+          "location": [271.06, 10],
           "orientation": "N"
         }
       },
@@ -57,8 +57,8 @@
   },
 
   "FP_SIZING": "absolute",
-  "DIE_AREA": [0, 0, 1378.16, 225.76],
-  "FP_DEF_TEMPLATE": "dir::tt/def/tt_block_8x2_pg.def",
+  "DIE_AREA": [0, 0, 682.64, 511.36],
+  "FP_DEF_TEMPLATE": "dir::tt/tech/sky130A/def/tt_block_4x4_pg.def",
 
   "//": "use alternative efabless decap cells to solve LI density issue",
   "DECAP_CELL": [
