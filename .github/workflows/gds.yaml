@@ -2,11 +2,12 @@ name: gds
 
 # Hardens the project from the RTL with LibreLane (the standard Tiny Tapeout
 # flow, tt-support-tools builds the config from info.yaml + src/config.json).
-# The 128-byte data RAM is then synthesized from src/RAM32.v; the DFFRAM
-# macro build of the TT07 chip is gds_custom.yaml (run by hand).
+# The 128-byte data RAM is then synthesized from src/RAM32.v, which with the
+# rest fills the 8x2 tile to ~90% and has not placed so far; the tapeout
+# build is the DFFRAM-macro flow (build.py, submitted with gds_custom.yaml).
+# Run by hand; synth.yaml checks the RTL on every push.
 
 on:
-  push:
   workflow_dispatch:
 
 jobs:

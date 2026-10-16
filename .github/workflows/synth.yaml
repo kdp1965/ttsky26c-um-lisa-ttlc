@@ -1,0 +1,34 @@
+name: synth
+
+# Synthesis and Yosys's check pass on every push: the structural problems
+# the hardening flow would stop on (logic loops, multiple drivers), in a
+# minute.
+
+on:
+  push:
+  workflow_dispatch:
+
+jobs:
+  synth:
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v6
+
+      - name: Yosys
+        uses: YosysHQ/setup-oss-cad-suite@v3
+
+      - name: Synthesize and check
+        shell: bash
+        run: |
+          cd src
+          files=$(python3 -c "import yaml; print(' '.join(yaml.safe_load(open('../info.yaml'))['project']['source_files']))")
+          yosys -q -l ../synth.log -p "read_verilog -sv ../test/test_cells.v $files; hierarchy -top tt_um_lisa; proc; flatten; synth -top tt_um_lisa; check -assert; stat"
+          grep -A40 "Number of cells" ../synth.log | head -60
+
+      - name: Log
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: synth-log
+          path: synth.log

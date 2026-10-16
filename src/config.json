@@ -6,7 +6,7 @@
   "//": "to place the RAM32 DFFRAM macro; see README.md.",
 
   "//": "PL_TARGET_DENSITY_PCT - increase if Global Placement fails with GPL-0302.",
-  "PL_TARGET_DENSITY_PCT": 70,
+  "PL_TARGET_DENSITY_PCT": 85,
 
   "//": "CLOCK_PERIOD in ns: 20 ns == 50 MHz (the TT07 chip closed at 50 MHz, runs at 66).",
   "CLOCK_PERIOD": 20,

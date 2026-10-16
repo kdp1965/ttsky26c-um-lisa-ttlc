@@ -48,10 +48,13 @@ build.py, config.json, pdn_cfg.tcl, odb_power.py, rename_yosys_cells.py
 
 ## Building
 
-`gds.yaml` hardens the design from the RTL with LibreLane in the standard
-Tiny Tapeout flow (`tt-gds-action@ttsky26c`), the way the template does: the
-128-byte RAM is then synthesized from `src/RAM32.v` instead of the DFFRAM
-macro. The TT07 chip was hardened locally instead, with the macro:
+`synth.yaml` synthesizes the RTL with Yosys on every push and runs its
+check pass (the structural problems the hardening flow stops on). `gds.yaml`
+(run by hand) hardens the design with LibreLane in the standard Tiny Tapeout
+flow (`tt-gds-action@ttsky26c`), the way the template does: the 128-byte
+RAM is then synthesized from `src/RAM32.v` instead of the DFFRAM macro,
+which fills the 8x2 tile to about 90% and has not placed so far. The TT07
+chip was hardened locally instead, with the macro:
 
 ```sh
 git clone -b ttsky25a https://github.com/TinyTapeout/tt-support-tools tt   # the floorplan templates
