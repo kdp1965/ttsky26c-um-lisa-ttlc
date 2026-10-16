@@ -84,7 +84,13 @@ this tile (its global route needs 128-144% of the met1-met4 resources).
 each macro power pin column that is not on a tile stripe (`odb_stripes.py`
 then runs the columns over the macro and makes every power pin box pdngen
 cut around the macro full height again: Tiny Tapeout's precheck wants each
-power port box to reach both edges of the tile). `EXTRA_EXCLUDED_CELLS` in
+power port box to reach both edges of the tile; a cut stripe that would
+touch a macro pin of the other net is left alone with a warning, which
+means the macro is off the stripe grid). A DFFRAM macro built with the
+tile's pitch and offsets (its `tech.yml` FP_PDN_VOFFSET 17.7 / VPITCH 38.87)
+wants its origin x at a multiple of 38.87 um; `harden/trial_ao.json` is
+the trial with the smaller AND-OR RAM32 from DFFRAM.librelane
+`models/ram_ao` (RESPIN.md). `EXTRA_EXCLUDED_CELLS` in
 src/config.json keeps the resizer off the sky130 delay cells, which it
 otherwise takes as its fanout buffer. `harden/trial_*.json` are per-run
 overlays (`OVERLAY=`), the trials RESPIN.md's Hardening section describes.

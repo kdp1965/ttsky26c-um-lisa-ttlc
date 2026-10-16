@@ -511,6 +511,31 @@ for loading code). By design; keep, and keep it out of the debuggers' polls
   in the GeneratePDN log is expected: it runs before the extension step
   bridges to the macro pins; the IR-drop step then reports every shape
   connected.) fix7's GDS, LEF and netlist are the submission.
+* A smaller RAM32 (2026-10-16, afternoon): DFFRAM.librelane (branch
+  ihp-cfgmem, commits 6ace631 and 9f2269b) now builds the macro in 320.16 x
+  116.96 um instead of 401.58 x 136 (-31%): the placer's nine near-empty
+  rows were an artifact (a 16-word block's side column of buffers ran past
+  the block; a tie-cell row; two spare rows), and `models/ram_ao` replaces
+  the 1088 tri-state buffers with a nand2 per bit per word, two nand4 per
+  bit per slice and an or4 per bit per block (same ports and pin sides; the
+  generic testbench passes on the routed netlist; DRC 0, LVS clean, no
+  antenna violations, setup +3.7 ns nominal / +1.8 at ss in DFFRAM's own
+  16.5 ns STA). Its 8 + 8 power pin columns sit on the tile's 38.87 um
+  stripe pitch at the tile's offsets, so in this tile the macro's origin x
+  must be a multiple of 38.87 (then every column coincides with a same-net
+  tile stripe, pdn_macro.tcl adds nothing and the extension step completes
+  the cut tile stripes over it); 2.65 um off, the cut VGND stripes could not
+  be completed across the VPWR pins. Trial in LISA (`harden/trial_ao.json`:
+  views in `macros_ao/`, macro at x = 349.83, horizontal halo 10 so no row
+  is left between the macro and the core edge - pdngen cannot power a 3.7 um
+  sliver): runs/macro-ao3 signed off - routed clean, Magic DRC 0, LVS
+  clean, antenna clean, IR drop 0.06 mV (0.6 with the old macro), hold met,
+  setup +5.6 ns nominal (+5.2 before), -7.0 at ss (the SDC items above),
+  utilization 64% (69%), every power port box full height. Not the
+  submission yet: adopting it is a copy of `macros_ao/` over `macros/`, the
+  location and halo into macro.json, and a rebuild; the 80 x 136 um it
+  frees would be worth a fresh placement (the anchored one leaves them
+  empty).
 * Found on the way: Yosys names a flattened net after any alias (the
   debugger's data bus is `core_inst_o[*]` in the netlist), the breakpoint
   registers are latches, and OpenSTA's `read_sdc` fails on an exception

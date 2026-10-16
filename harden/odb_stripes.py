@@ -100,6 +100,25 @@ def extend(reader, layer):
         print(f"[INFO] {net_name}: {len(existing)} tile stripes found, {added} full-height stripes added over macro pin columns")
 
         # pdngen's cut stripes: complete them and make their pin boxes full height
+        # - unless the completed stripe would touch a macro pin of the other
+        # net (pdngen cut it for that reason): a macro whose power pins are
+        # off the tile's stripe grid.  The tile template needs every stripe,
+        # so such a macro has to move onto the grid (x a multiple of the pitch).
+        other = block.findNet("VGND" if net_name == "VPWR" else "VPWR")
+        other_pins = []
+        for inst in block.getInsts():
+            master = inst.getMaster()
+            if not master.isBlock() or inst.getOrient() != "R0":
+                continue
+            mt = master.findMTerm(other.getName()) if other is not None else None
+            if mt is None:
+                continue
+            ib = inst.getBBox()
+            for mpin in mt.getMPins():
+                for box in mpin.getGeometry():
+                    if box.getTechLayer().getName() == layer:
+                        other_pins.append((ib.xMin() + box.xMin(), ib.xMin() + box.xMax()))
+        spacing = m.getSpacing() if m.getSpacing() else int(0.3 * dbu)
         full = set()
         for bterm in net.getBTerms():
             for pin in bterm.getBPins():
@@ -116,6 +135,10 @@ def extend(reader, layer):
                     if box.yMin() <= ylo and box.yMax() >= yhi:
                         continue
                     x1, x2 = box.xMin(), box.xMax()
+                    clash = [(a, b) for a, b in other_pins if x1 - spacing < b and a < x2 + spacing]
+                    if clash:
+                        print(f"[WARNING] {net_name}: pin box at x={(x1 + x2) / 2 / dbu:.3f} um is cut around the macro and cannot be completed: it would come within {spacing / dbu:.2f} um of a macro {other.getName()} pin at x={(clash[0][0] + clash[0][1]) / 2 / dbu:.3f} um - move the macro onto the stripe grid")
+                        continue
                     print(f"[INFO] {net_name}: pin box at x={(x1 + x2) / 2 / dbu:.3f} um spans y {box.yMin() / dbu:.2f}..{box.yMax() / dbu:.2f} um (cut around the macro): completed to the full height")
                     odb.dbSBox_create(swire, m, x1, ylo, x2, yhi, "STRIPE")
                     odb.dbBox_destroy(box)
