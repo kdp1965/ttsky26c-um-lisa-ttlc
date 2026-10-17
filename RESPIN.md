@@ -510,7 +510,8 @@ for loading code). By design; keep, and keep it out of the debuggers' polls
   reach both edges. (pdngen's own PSM-0069 "check connectivity failed"
   in the GeneratePDN log is expected: it runs before the extension step
   bridges to the macro pins; the IR-drop step then reports every shape
-  connected.) fix7's GDS, LEF and netlist are the submission.
+  connected.) fix7's GDS, LEF and netlist were the submission until the
+  release candidate below.
 * A smaller RAM32 (2026-10-16, afternoon): DFFRAM.librelane (branch
   ihp-cfgmem, commits 6ace631 and 9f2269b) now builds the macro in 320.16 x
   116.96 um instead of 401.58 x 136 (-31%): the placer's nine near-empty
@@ -568,6 +569,10 @@ for loading code). By design; keep, and keep it out of the debuggers' polls
   gives the router is real. The DFFRAM macro keeps its own 2.72 um row
   margin top and bottom and 1.38 um left and right, so the tile's cells
   are never closer than that to the macro's.
+  ao5 is the release candidate (2026-10-16, evening): `macros/` holds the
+  AND-OR macro, macro.json its position, halos, FP_PRUNE_THRESHOLD and the
+  ao5 anchor table, `gds/`, `lef/` and `pnl/` are ao5's (commit 85f18be,
+  tag rc1), and gds_custom.yaml run 39000647237 PASSED the precheck.
 * Found on the way: Yosys names a flattened net after any alias (the
   debugger's data bus is `core_inst_o[*]` in the netlist), the breakpoint
   registers are latches, and OpenSTA's `read_sdc` fails on an exception

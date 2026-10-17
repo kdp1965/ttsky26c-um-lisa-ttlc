@@ -71,9 +71,12 @@ make -C harden macro OVERLAY=trial_fix5.json     # a trial: that JSON's variable
 `--create-user-config` does (the sources, the tile's die area and floorplan
 template from `info.yaml`, over `src/config.json`); results land in
 `harden/runs/<tag>/final/`. The build to submit is `make -C harden macro`
-(macro.json replays the reference placement, `ANCHOR_CELLS_TABLE`, see
-below; `trial_fix6.json` was the same as an overlay); copy its GDS, LEF and
-netlist to `gds/`, `lef/` and `pnl/` and run `gds_custom.yaml`.
+(macro.json: the AND-OR RAM32 in `macros/` on the core's bottom row at x
+349.83, halos 2 x 1 um, `FP_PRUNE_THRESHOLD` 11, and the release
+candidate's placement replayed through `ANCHOR_CELLS_TABLE`, see below);
+copy its GDS, LEF and netlist to `gds/`, `lef/` and `pnl/` and run
+`gds_custom.yaml`. `gds/`, `lef/` and `pnl/` hold runs/macro-ao5, the
+release candidate (RESPIN.md, the halo trial).
 The macro flow places with `GPL_CELL_PADDING` 2: the slew/fanout repair, CTS
 and the hold buffers add 30% to the placed cells and without the padding the
 legalizer packs them into 30 um bins over 90% full, where the detailed router
@@ -88,9 +91,10 @@ power port box to reach both edges of the tile; a cut stripe that would
 touch a macro pin of the other net is left alone with a warning, which
 means the macro is off the stripe grid). A DFFRAM macro built with the
 tile's pitch and offsets (its `tech.yml` FP_PDN_VOFFSET 17.7 / VPITCH 38.87)
-wants its origin x at a multiple of 38.87 um; `harden/trial_ao.json` is
-the trial with the smaller AND-OR RAM32 from DFFRAM.librelane
-`models/ram_ao` (RESPIN.md). `EXTRA_EXCLUDED_CELLS` in
+wants its origin x at a multiple of 38.87 um. `macros/` is the smaller
+AND-OR RAM32 from DFFRAM.librelane `models/ram_ao` (320.16 x 116.96 um;
+`harden/trial_ao*.json` were its trials, RESPIN.md; the tri-state macro it
+replaces is in the git history). `EXTRA_EXCLUDED_CELLS` in
 src/config.json keeps the resizer off the sky130 delay cells, which it
 otherwise takes as its fanout buffer. `harden/trial_*.json` are per-run
 overlays (`OVERLAY=`), the trials RESPIN.md's Hardening section describes.
