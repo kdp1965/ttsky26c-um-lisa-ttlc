@@ -2,7 +2,9 @@ name: gds_custom
 
 # Submits a locally hardened GDS (the TT07 way: build.py with the RAM32 DFFRAM
 # macro, results copied to gds/, lef/ and pnl/) instead of hardening in the
-# action.  Run it by hand once those files are committed.
+# action.  Run it by hand once those files are committed.  The viewer job
+# publishes the 2D / 3D GDS viewer to the repo's GitHub Pages
+# (https://kdp1965.github.io/ttsky26c-um-lisa-ttlc/).
 
 on:
   workflow_dispatch:
@@ -37,3 +39,12 @@ jobs:
     steps:
       - name: Run Tiny Tapeout Precheck
         uses: TinyTapeout/tt-gds-action/precheck@ttsky26c
+
+  viewer:
+    needs: gds
+    runs-on: ubuntu-24.04
+    permissions:
+      pages: write      # to deploy to Pages
+      id-token: write   # to verify the deployment originates from an appropriate source
+    steps:
+      - uses: TinyTapeout/tt-gds-action/viewer@ttsky26c
