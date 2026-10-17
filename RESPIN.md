@@ -262,6 +262,35 @@ Any access to the "current opcode" register increments PC (`dbg_inc`, meant
 for loading code). By design; keep, and keep it out of the debuggers' polls
 (documented in the Commander README).
 
+## 16. Stack convention
+
+TT07's `push`/`sra` write at SP and then decrement it, `pop`/`lra`
+increment first and then read: SP sits one below the byte on top of the
+stack, the top is `1(sp)` and `0(sp)` is a free slot every frame wastes
+(`lisa_isa.md`, "Stack convention"). By design, not a bug, but Ken wants
+it the usual way around (2026-10-17): decrement before the write,
+increment after the read, SP at the top byte, `0(sp)` the top of the
+frame. The order of the two bytes of `sra`/`push ix` stays (the high byte
+with the cond bit at the lower address), so a frame's layout is the same
+one address lower; every `n(sp)` offset, including `ldxx`/`stxx`,
+`shl16`/`shr16`, `lddiv` and `div`'s, is one less.
+
+Toolchain first (done 2026-10-17): `lisa_sim --rev2` models it (with the
+rewritten adder, the divider without its stray write, `swap n(sp)` at sp +
+n and `--fixed-irq`), `sdcc -mlisa --rev2` lays its frames out for it
+(`gen.c` counts every offset from `spTop ()`, the library's `.s` write
+theirs as `T+n(sp)` with `T` from `lisamodel.inc`; the lisa-rev2 library),
+and `lisa_cdb` (the debuggers' frame unwinding) takes the top's offset
+from `Cdb::set_sp_top`. The SDCC suite passes both ways (`make check
+REV2=1`, `make test-lisa LISA_REV2=1`).
+
+RTL: to do. `lisa_core.v`'s SP paths for `push a`, `pop a`, `sra`, `lra`,
+`push ix`, `pop ix`: the address of the write becomes SP − 1 (SP − 2 for
+the second byte) with SP decremented in the same cycle, the read SP (SP +
+1) with the increment after. Nothing else changes (`n(sp)` stays SP + n,
+`ads` as it is). Verify: test/core with a `--rev2` build of the suite,
+then the chip testbench.
+
 ## Verification (test/, see test/README.md)
 
 * `test/core/`: tb_core.v, the core with the chip's registered data bus, the
