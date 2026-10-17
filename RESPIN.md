@@ -635,6 +635,14 @@ for loading code). By design; keep, and keep it out of the debuggers' polls
   instructions instead of the software addition; `--bf16-float`'s
   additions too); test_bf16 and test_bf16f built with it pass here.
 
+* test_divl (2026-10-17): no error in it, the suite runner's 6M-clock
+  silence limit. Its last block, 200 LCG divisions against a bit-serial
+  reference in C, printed nothing for about 18M clocks (40M before the
+  streaming fetch). The test now prints a mark every 16 iterations
+  (lisa-tools a453dec) and passes with the default limit. Left on the chip
+  testbench: test_bigframe and test_ptroff, which need the data cache
+  (they pass in the CACHE=1 list), and test_irq, which prints nothing.
+
 ## Decisions (Ken, 2026-10-15)
 
 * 8, the divider: whatever gives the most efficient code, with a compiler
