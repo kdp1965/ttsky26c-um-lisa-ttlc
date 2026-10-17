@@ -29,7 +29,7 @@ PROJECT_SOURCES  = tt_um_lisa.v RAM32.v
 PROJECT_SOURCES += lisa_core.v lisa_dbg.v lisa_div.v lisa_periph.v lisa_io_mux.v
 PROJECT_SOURCES += lisa_qqspi.v lisa_qspi_controller.v lisa_rx8n.v lisa_tx8n.v lisa_i2c.v
 PROJECT_SOURCES += debug_ctrl.v debug_autobaud.v debug_brg.v debug_regs.v
-PROJECT_SOURCES += data_cache8.v inst_cache.v
+PROJECT_SOURCES += data_cache8.v inst_stream.v
 PROJECT_SOURCES += i2c_master_byte_ctrl.v i2c_master_bit_ctrl.v lisa_uart.v
 PROJECT_SOURCES += fops.v lampFPU_div_top.sv lampFPU_div.sv lampFPU_fractDiv.sv lampFPU_utils.v
 PROJECT_SOURCES += mc14500b.v ttlc_io.v ttlc_inst_cache.v shift_reg_io.v
@@ -76,7 +76,7 @@ MODULE = test
 
 # make TTLC=1: the TTLC loopback through the testbench's I/O chains
 # A program from the SDCC test suite (or any Intel HEX / @addr / opcode-per-line
-# image): make IHX=<file> [CACHE=1] [SPI=1] [TIMEOUT=<clocks of silence>] [DUMP=1]
+# image): make IHX=<file> [CACHE=1] [SPI=1] [TIMEOUT=<clocks of silence>] [STATS=1] [DUMP=1]
 ifeq ($(IHX),)
 ifneq ($(TTLC),)
 PLUSARGS += +FIRMWARE=$(PWD)/progs/ttlc_test.hex +PROGRAM=ttlc_test.hex +TTLC
@@ -100,8 +100,15 @@ endif
 ifneq ($(TIMEOUT),)
 PLUSARGS += +TIMEOUT=$(TIMEOUT)
 endif
+ifneq ($(STATS),)
+PLUSARGS += +STATS           # the fetch counts (clocks per instruction, the wait for the flash)
+endif
 ifneq ($(DUMP),)
 PLUSARGS += +DUMP
+# Verilator traces only when built for it: cocotb's VERILATOR_TRACE adds
+# --trace and the runtime switch, --trace-fst makes tb.vcd (and dump.fst) FST
+VERILATOR_TRACE = 1
+COMPILE_ARGS += --trace-fst
 endif
 
 # include cocotb's make rules to take care of the simulator setup

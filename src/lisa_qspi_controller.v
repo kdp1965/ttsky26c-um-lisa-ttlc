@@ -60,6 +60,8 @@ module lisa_qspi_controller
    input  wire          lisa1_valid,         // Indicates a valid request 
    input  wire [3:0]    lisa1_xfer_len,      // Number of 32-bit words to transfer
    input  wire [CHIP_SELECTS -1:0]  lisa1_ce_ctrl,
+   input  wire          lisa1_stream,        // Keep its read burst open (inst_stream.v)
+   output wire          lisa1_yield,         // ... another client is waiting: end it
    input  wire [23:0]   lisa2_addr,          // 8Mx32
    output wire [15:0]   lisa2_rdata,         // Read data
    input  wire [15:0]   lisa2_wdata,         // Data to write
@@ -96,7 +98,8 @@ module lisa_qspi_controller
    output wire [3:0]    xfer_len,            // Number of 16-bit words to transfer
    output wire [CHIP_SELECTS -1:0]  ce_ctrl,
    output wire          custom_spi_cmd,
-   output wire [7:0]    cmd_quad_write
+   output wire [7:0]    cmd_quad_write,
+   output wire          stream               // The active client's burst goes on
 );
 
    localparam  N_CLIENTS = 4;
@@ -180,6 +183,8 @@ module lisa_qspi_controller
    =================================================================================
    */
    assign addr       = c_addr[arb_sel];
+   assign stream     = active && (arb_sel == 2'h1) && lisa1_stream;
+   assign lisa1_yield = active && (arb_sel == 2'h1) && (c_valid[0] || c_valid[2] || c_valid[3]);
    assign wdata      = c_wdata[arb_sel];
    assign wstrb      = c_wstrb[arb_sel];
    assign valid      = c_valid[arb_sel] & valid_gate;

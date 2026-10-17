@@ -140,11 +140,25 @@ async def test_ttlc_debug(dut):
 
 @cocotb.test(skip=plusarg('DEFAULT') is not None or plusarg('TTLC') is not None)
 async def test_program(dut):
-    """+FIRMWARE=<hex>: run it (the data cache on with +CACHE) and expect ALL PASSED"""
+    """+FIRMWARE=<hex>: run it (the data cache on with +CACHE) and expect ALL PASSED;
+    +STATS counts the fetch clocks"""
     lisa = await start(dut)
     cache = plusarg('CACHE') is not None
     timeout = int(plusarg('TIMEOUT', 2_000_000))
     await lisa.setup(cache=cache, quad=plusarg('SPI') is None)
     dut._log.info('running %s with the data cache %s' % (plusarg('PROGRAM', plusarg('FIRMWARE')), 'on' if cache else 'off'))
-    text = await lisa.run(timeout=timeout)
+    stats = plusarg('STATS') is not None
+    counters = ('st_clocks', 'st_insts', 'st_wait', 'st_xfers', 'st_words')
+    before = [int(getattr(dut, c).value) for c in counters] if stats else None
+    try:
+        text = await lisa.run(timeout=timeout)
+    finally:
+        if stats:
+            # the counters are in tb.v; between the resume and the last line
+            # of output (a finished program spins, but only until run returns)
+            clocks, insts, wait, xfers, words = [int(getattr(dut, c).value) - b for c, b in zip(counters, before)]
+            dut._log.info('fetch: %d clocks, %d instructions (%.1f clocks each), %d clocks waiting for one (%.0f%%), '
+                          '%d QSPI transfers delivering %d words (%.1f each)'
+                          % (clocks, insts, clocks / max(1, insts), wait, 100.0 * wait / max(1, clocks),
+                             xfers, words, words / max(1, xfers)))
     assert 'ALL PASSED' in text, 'the program did not pass: %r' % text[-200:]

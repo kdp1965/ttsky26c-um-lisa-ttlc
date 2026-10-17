@@ -295,8 +295,8 @@ for loading code). By design; keep, and keep it out of the debuggers' polls
   tile's power stripes over its met4 pins after the PDN.
 * Timing: TT07 was constrained at 30 ns (`impl.sdc`, not the 20 ns in its
   config.json) and `src/lisa.sdc` keeps that and TT07's multi-cycle
-  exceptions - from the PC, the instruction cache line (`cl_valid`,
-  `cl_addr0`), the breakpoint latches, the debugger's address, data, write,
+  exceptions - from the PC, the instruction window (`count`, `head_addr` of
+  inst_stream.v; TT07's cache line `cl_valid`, `cl_addr0`), the breakpoint latches, the debugger's address, data, write,
   halted and continue registers, the pre-decode state and `d_we_r`, to the
   registers decode writes (PC, IX, RA, IA, SP, cond, ie, isr_jump, facc, the
   divider's operands and flags). At 20 ns with only the PC exceptions the
@@ -573,6 +573,50 @@ for loading code). By design; keep, and keep it out of the debuggers' polls
   AND-OR macro, macro.json its position, halos, FP_PRUNE_THRESHOLD and the
   ao5 anchor table, `gds/`, `lef/` and `pnl/` are ao5's (commit 85f18be,
   tag rc1), and gds_custom.yaml run 39000647237 PASSED the precheck.
+* A streaming instruction fetch (2026-10-17): lisa-tools/lisa_sim's cache
+  model (`--icache`, `make icache` in sdcc_test) measured the TT07 fetch on
+  the SDCC suite: 85-90% of the clocks in QSPI line fills, 86% of the
+  misses on the next sequential word, so a 4-line cache (Ken's question)
+  gains 0-17% and a second 32x32 macro 1.0-1.7x, while keeping the flash
+  read open gains 1.7-2.6x. `src/inst_stream.v` replaces `inst_cache.v`:
+  a burst is started at the word the core asks for and the QSPI engine
+  keeps clocking the following words into a window of 8 (10 clocks each),
+  pausing with chip select low when it is 3 words ahead of the core; the
+  words behind the core stay (up to 4), so loops of five instructions or
+  fewer - every polling loop - run from the window; a fetch of the word
+  the burst delivers next is waited for, any other word the window does
+  not hold ends the burst and starts one there (about 67 clocks: command,
+  address, dummies, the word). `lisa_qqspi.v` got the open-ended burst
+  (`stream`: no length, paused in S7 until the client takes the word,
+  ended at once when the client drops it) and `lisa_qspi_controller.v` a
+  yield to the instruction client when another client waits, honoured
+  once the words ahead are in, after which the burst goes on from where
+  it was when the bus is free. The first version did it in one FIFO and
+  was slower on every UART-bound test: the words behind the core were
+  dropped and the two-instruction UART poll restarted the burst on each
+  iteration. Two deadlocks found by waveform (`make ... DUMP=1`, now a
+  real trace under Verilator): a burst's first word held by the engine
+  with no room for it because the window counted three words "ahead" of
+  the last word taken while the core had moved past them, and `miss`
+  asserted on every clock the core waited for a burst's first word, which
+  latched an abort and tore down every burst after one word; then, after
+  a yield, a jump two words past the window counted as a wait but the
+  restart needed room computed from the stale position. The window's
+  position now follows the core's address on a hit or a wait. Every chip
+  testbench matches the old RTL: the debugger, bringup and UART burst
+  tests, the suite (16 pass, the same 5 fail: bigframe, irq, bf16's
+  adder cases, ptroff, divl's silence timeout), the data-cache suite
+  (8 pass, test_cacherm's TT07 expectation) and both TTLC tests. Measured
+  with `STATS=1` (counters in tb.v over the program's run, 50 MHz, the
+  UART at 720 clocks a character): test_divl, compute-bound, 42.5M to
+  18.9M clocks (2.25x); test_pfu 2.28M to 1.14M (2.0x), its clocks waiting
+  for the fetch 80% to 58%, QSPI transfers 21584 of 4 words to 3373 of
+  24; test_strs 1.16x and test_loop 1.15x; test_core 1.0x (46% to 24%
+  waiting, the rest of its time in the UART poll). The remaining wait is
+  the QSPI word rate, 10 clocks a word at SCLK = clk/2 against 3-4 clocks
+  an instruction. Standalone synthesis: inst_stream 9529 um2 (159 flops)
+  against inst_cache's 3909 (84), +1.6% of the core. The release
+  candidate rc1 is unchanged; a rebuild adopts this.
 * Found on the way: Yosys names a flattened net after any alias (the
   debugger's data bus is `core_inst_o[*]` in the netlist), the breakpoint
   registers are latches, and OpenSTA's `read_sdc` fails on an exception

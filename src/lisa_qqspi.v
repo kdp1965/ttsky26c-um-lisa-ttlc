@@ -69,7 +69,9 @@ module lisa_qqspi
    input wire [6:0]                 spi_ce_delay,
 
    input wire                       custom_spi_cmd,
-   input wire [7:0]                 cmd_quad_write
+   input wire [7:0]                 cmd_quad_write,
+   input wire                       stream      // A read burst that goes on, word after word, while
+                                                // this is high: the client ends it by dropping it
 );
 //   localparam [7:0] CMD_QUAD_WRITE        = 8'h38;
    localparam [7:0] CMD_FAST_READ_QUAD    = 8'hEB;
@@ -108,6 +110,8 @@ module lisa_qqspi
    reg  [CHIP_SELECTS -1:0]   ce_next;
    reg  [3:0]                 len_count;
    reg  [3:0]                 len_count_next;
+   reg                        is_stream;        // This transfer is such a burst
+   reg                        is_stream_next;
    wire                       byte_offset;
    wire [4:0]                 wr_cycles;
    wire [15:0]                wr_buffer;
@@ -196,6 +200,7 @@ module lisa_qqspi
          len_count    <= 4'h0;
          xfer_done    <= 1'b0;
          clk_div_r    <= 4'h0;
+         is_stream    <= 1'b0;
       end else begin
          state         <= next_state;
          ce            <= ce_next;
@@ -208,6 +213,7 @@ module lisa_qqspi
          rdata         <= rdata_next;
          ready         <= ready_next;
          len_count     <= len_count_next;
+         is_stream     <= is_stream_next;
          xfer_done     <= xfer_done_next;
          clk_div_r     <= clk_div_next;
       end
@@ -226,10 +232,24 @@ module lisa_qqspi
       rdata_next       = rdata;
       xfer_cycles_next = xfer_cycles;
       len_count_next   = len_count;
+      is_stream_next   = is_stream;
       xfer_done_next   = xfer_done;
       clk_div_next     = clk_div_r;
       
-      if (|xfer_cycles)
+      if (is_stream && !stream && state != S0_IDLE)
+      begin
+         // The client ended its burst (a jump, or the bus is wanted): deselect
+         // now, whatever was in flight, and report the transfer done
+         next_state       = S0_IDLE;
+         ce_next          = ~0;
+         sclk_next        = 1'b0;
+         sio_oe_next      = 4'b0001;
+         xfer_cycles_next = 0;
+         ready_next       = 1'b0;
+         xfer_done_next   = 1'b1;
+         is_stream_next   = 1'b0;
+      end
+      else if (|xfer_cycles)
       begin  
          sio_out_next[3:0] = is_quad ? spi_buf[23:20] : {3'b0, spi_buf[23]};
          
@@ -268,10 +288,12 @@ module lisa_qqspi
             S0_IDLE: begin
                sio_oe_next  = 4'b0001;
                is_quad_next = 0;
+               is_stream_next = 0;
                xfer_done_next = 1'b0;
                if (valid && !ready) begin
                   next_state = write & is_flash_c ? S8_SELECT_WREN : S1_SELECT_DEVICE;
                   xfer_cycles_next = 0;
+                  is_stream_next = stream & read;
                end else if (!valid && ready) begin
                   ready_next = 1'b0;
                   ce_next = ~0;
@@ -349,7 +371,14 @@ module lisa_qqspi
                rdata_next = {spi_buf[7:0], spi_buf[15:8]};
                ready_next = 1'b1;
                sclk_next = 1'b0;
-               if (len_count == 4'h0)
+               if (is_stream)
+               begin
+                  // A burst: the next word when the client has room for it (ready
+                  // stays high until then); it ends the burst by dropping stream
+                  if (ready_ack)
+                     next_state = S6_XFER;
+               end
+               else if (len_count == 4'h0)
                begin
                   next_state     = S0_IDLE;
                   xfer_done_next = 1'b1;

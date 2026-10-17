@@ -22,7 +22,9 @@ LISA is a microcontroller built around a custom 8-bit accumulator core
      programmable SCLK divider, CE delay, dummy cycles and base addresses
    - 128 bytes of on-chip RAM, used directly or as an 8-line data cache in
      front of a 32 KB SPI RAM
-   - a single-line (4 instruction) instruction cache
+   - a streaming instruction fetch (`inst_stream.v`: the flash read is kept
+     open and the core runs from a window of 8 words; TT07 had a single
+     4-instruction cache line)
    - UART (shared with the debugger), a dedicated UART2, two 16-bit timers,
      an 8-bit input port, 8-bit output port, 4-bit bidirectional port, I2C master
    - 8x8 multiplier, 16/16 divider, BF16 multiply / divide / add / compare / convert
@@ -123,10 +125,10 @@ The timing constraints are `src/lisa.sdc`: LibreLane's `base.sdc` (the
 clock from `CLOCK_PERIOD`, 30 ns as the TT07 build was constrained - its
 `impl.sdc` overrode the 20 ns of its config; the chip runs at 66 MHz) plus
 the core's multi-cycle paths, the set TT07 closed with: what the PC, the
-instruction cache line, the breakpoint latches and the debugger's registers
+instruction window, the breakpoint latches and the debugger's registers
 reach is written two or three clocks later. The registers are found through
 their Q nets (the cells are numbered), so there is no netlist renaming step;
-every STA log opens with `lisa.sdc: pc 15 cl_valid 1 cl_addr 15 brk 96 ...`,
+every STA log opens with `lisa.sdc: pc 15 win_count 4 win_head 15 brk 96 ...`,
 the registers each group resolved to, and a group that resolves to nothing
 is reported (Yosys names a flattened net after any of its aliases: the
 debugger's data register came out as `core_inst_o`). `make -C harden status

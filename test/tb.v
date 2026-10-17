@@ -49,7 +49,24 @@ module tb
    wire           baud_set;
    wire [6:0]     baud_div;
 
-   // this part dumps the trace to a vcd file that can be viewed with GTKWave
+   // The fetch counts test.py reads with +STATS: the core's clocks, the
+   // instructions it took and the clocks it waited for one; the QSPI
+   // engine's transfers and the words they delivered (the instruction fetch
+   // is nearly all of them when the data cache is off)
+   reg [31:0] st_clocks = 0, st_insts = 0, st_wait = 0, st_xfers = 0, st_words = 0;
+   reg        st_ready_r = 0;
+   reg [3:0]  st_state_r = 0;
+   always @(posedge clk)
+   begin
+      st_clocks  <= st_clocks + 1;
+      if (lisa.core_i_fetch & lisa.core_i_ready) st_insts <= st_insts + 1;
+      if (lisa.core_i_fetch & !lisa.core_i_ready) st_wait <= st_wait + 1;
+      st_ready_r <= lisa.i_lisa_qqspi.ready;
+      st_state_r <= lisa.i_lisa_qqspi.state;
+      if (lisa.i_lisa_qqspi.ready & !st_ready_r) st_words <= st_words + 1;
+      if (st_state_r == 4'd0 && lisa.i_lisa_qqspi.state == 4'd1) st_xfers <= st_xfers + 1;
+   end
+
    initial begin
      if ($test$plusargs("DUMP"))
      begin

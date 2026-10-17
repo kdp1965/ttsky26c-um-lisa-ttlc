@@ -2,7 +2,7 @@
 # CLOCK_PERIOD, the I/O delays, max fanout/transition/capacitance) plus the
 # core's multi-cycle paths, the ones the TT07 build (OpenLane 2, impl.sdc,
 # 30 ns) closed with.  An instruction takes the fetch, pre-decode and decode
-# states: what the PC, the instruction cache line, the breakpoint and debug
+# states: what the PC, the instruction window, the breakpoint and debug
 # registers reach - the next PC, IX, RA, IA, SP, cond, ie, the BF16
 # accumulator, the divider's operands and flags - is registered two or three
 # clocks after the source changed.
@@ -55,8 +55,10 @@ set div {i_lisa_core.GEN_DIV.i_lisa_div}
 
 # sources
 set pc         [lisa_regs {i_lisa_core.pc[*]}]
-set cl_valid   [lisa_regs {i_inst_cache.cl_valid}]
-set cl_addr    [lisa_regs {i_inst_cache.cl_addr*}]
+# the streaming fetch's window (inst_stream.v): its count and first address
+# decide the hit, as the TT07 cache line's valid bit and address did
+set win_count  [lisa_regs {i_inst_stream.count[*]}]
+set win_head   [lisa_regs {i_inst_stream.head_addr[*]}]
 set brk        [lisa_regs "$dbg.brk_r*"]
 set dbg_a      [lisa_regs {dbg_a[*]} {i_lisa_core.dbg_a[*]} {i_debug_ctrl.s_debug_arg[*]}]
 set dbg_di     [lisa_regs {dbg_di[*]} {core_inst_o[*]} {i_lisa_core.dbg_di[*]} {i_lisa_core.inst_o[*]}]
@@ -86,7 +88,7 @@ set div_cond   [lisa_regs "$div.cond"]
 set div_ixc    [lisa_regs "$div.ix_cond"]
 set div_sinv   [lisa_regs "$div.signed_inversion"]
 
-set groups {pc cl_valid cl_addr brk dbg_a dbg_di dbg_we dbg_halted cont_q predec d_we_r
+set groups {pc win_count win_head brk dbg_a dbg_di dbg_we dbg_halted cont_q predec d_we_r
             facc ix ra ia sp cond ie isr_jump isr_sh div_rs1 div_rs2 div_zflag div_cond div_ixc div_sinv}
 set report "lisa.sdc:"
 foreach g $groups { append report " $g [llength [set $g]]" }
@@ -102,7 +104,7 @@ set core2 [concat $div_rs1 $div_rs2]
 
 lisa_mcp 3 $pc [concat $pc $core3]
 lisa_mcp 2 $pc $core2
-foreach src [list $cl_valid $cl_addr] {
+foreach src [list $win_count $win_head] {
     lisa_mcp 3 $src $core3
     lisa_mcp 2 $src $core2
 }

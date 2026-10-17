@@ -239,6 +239,9 @@ module tt_um_lisa
    wire                 lisa1_valid;         // Indicates a valid request 
    wire [3:0]           lisa1_xfer_len;      // Number of 32-bit words to transfer
    wire [1:0]           lisa1_ce_ctrl;
+   wire                 lisa1_stream;        // The instruction burst stays open
+   wire                 lisa1_yield;         // ... another client wants the QSPI
+   wire [14:0]          lisa1_word_addr;     // The word the burst starts at
    wire [15:0]          lisa1_base_addr;
                         
    // ==========================================================================
@@ -285,6 +288,7 @@ module tt_um_lisa
    wire                 xfer_done;           // Total xfer_len transfer is done
    wire                 valid;               // Indicates a valid request 
    wire [3:0]           xfer_len;            // Number of 32-bit words to transfer
+   wire                 stream;              // The active client's read burst goes on
 
    // ==========================================================================
    // Chip select controls
@@ -494,7 +498,7 @@ module tt_um_lisa
    // ==========================================================================
    // Instantiate the INST CACHE controller
    // ==========================================================================
-   inst_cache i_inst_cache
+   inst_stream i_inst_stream
    (
       .clk                       ( clk                       ),
       .rst_n                     ( rst_n_r[2]                ),
@@ -508,6 +512,7 @@ module tt_um_lisa
       .core_i_ready              ( core_i_ready              ),
                                                              
       // Interface to the QSPI controller                    
+      .qspi_addr                 ( lisa1_word_addr           ),
       .qspi_rdata                ( lisa1_rdata               ),
       .qspi_wdata                ( lisa1_wdata               ),
       .qspi_wstrb                ( lisa1_wstrb               ),
@@ -516,6 +521,8 @@ module tt_um_lisa
       .qspi_xfer_done            ( lisa1_xfer_done           ),
       .qspi_valid                ( lisa1_valid               ),
       .qspi_xfer_len             ( lisa1_xfer_len            ),
+      .qspi_stream               ( lisa1_stream              ),
+      .qspi_yield                ( lisa1_yield               ),
 
       .inst_cache_invalidate     ( inst_cache_invalidate     ),
       .inst_cache_invalidate_ack ( inst_cache_invalidate_ack )
@@ -670,6 +677,8 @@ module tt_um_lisa
       .lisa1_valid               ( lisa1_valid               ), // Indicates a valid request
       .lisa1_xfer_len            ( lisa1_xfer_len            ), // Number of 32-bit words to transfer
       .lisa1_ce_ctrl             ( lisa1_ce_ctrl             ),
+      .lisa1_stream              ( lisa1_stream              ), // Keep its burst open
+      .lisa1_yield               ( lisa1_yield               ), // ... another client waits
 
       // Interface for Lisa core data bus
       .lisa2_addr                ( lisa2_addr                ), // 8Mx32
@@ -707,7 +716,8 @@ module tt_um_lisa
       .xfer_len                  ( xfer_len                  ), // Number of 32-bit words to transfer
       .ce_ctrl                   ( ce_ctrl                   ),
       .custom_spi_cmd            ( custom_spi_cmd            ),
-      .cmd_quad_write            ( cmd_quad_write            )
+      .cmd_quad_write            ( cmd_quad_write            ),
+      .stream                    ( stream                    )  // The active client's burst goes on
    );
 
    // ==========================================================================
@@ -728,6 +738,7 @@ module tt_um_lisa
       .xfer_done                 ( xfer_done                 ), // Total xfer_len transfer is done
       .valid                     ( valid                     ), // Indicates a valid request
       .xfer_len                  ( xfer_len                  ), // Number of 32-bit words to transfer
+      .stream                    ( stream                    ), // The burst goes on
      
       // Per chip-select controls
       .ce_ctrl                   ( ce_ctrl                   ),
@@ -883,7 +894,7 @@ module tt_um_lisa
 
    assign dbg_do         = dbg_do_lisa | dbg_do_regs;
    assign dbg_ready      = dbg_ready_lisa | dbg_ready_regs;
-   assign lisa1_addr     = {lisa1_base_addr, 8'h0} | {8'h0, core_i_addr, 1'b0};
+   assign lisa1_addr     = {lisa1_base_addr, 8'h0} | {8'h0, lisa1_word_addr, 1'b0};
    assign ttlc_addr      = {ttlc_base_addr, 8'h0} | {11'h0, mc14500_pc, 1'b0};
    assign baud_div       = ui_in[6:0];
    assign baud_set       = ui_in[7];

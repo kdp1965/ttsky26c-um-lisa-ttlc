@@ -22,7 +22,10 @@ make SIM=icarus               # what CI runs
 ```
 
 `TIMEOUT` is clocks of console silence (a program that computes for long
-without printing needs more). `DUMP=1` writes `tb.vcd`.
+without printing needs more). `STATS=1` counts the fetch: the clocks per
+instruction, the clocks the core waited for one, the streaming fetch's
+bursts and words (`fetch: ...` in the log). `DUMP=1` writes `tb.vcd` (FST
+under Verilator, built for tracing; `fst2vcd` converts it).
 
 ## `test/core/` - the core
 
