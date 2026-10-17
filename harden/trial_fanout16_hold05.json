@@ -1,0 +1,5 @@
+{
+  "//": "Trial: trial_fanout16.json plus the post-CTS hold margin 0.1 -> 0.05 ns. Fanout 16 alone removed 480 of the 3026 repair buffers but upsized their drivers instead, so the placed area did not move (macro-fanout16-grt: 189.4k vs 189.0k um2 of standard cells) and the 90%-full corners stayed. The 1346 hold buffers are 7% of the cell area and 12-13% of the debug UART cluster's, right where the router stalls; this measures how many a halved margin removes (TO=OpenROAD.GlobalRouting). Whether 50 ps of hold margin is acceptable for silicon is a separate decision.",
+  "MAX_FANOUT_CONSTRAINT": 16,
+  "PL_RESIZER_HOLD_SLACK_MARGIN": 0.05
+}

@@ -1,0 +1,4 @@
+{
+  "//": "Trial: the fanout constraint 10 -> 16. The post-placement repair_design buffered 1271 nets with 2899 buffers under the default of 10 (7% of the standard-cell area, 2666 fanout/slew buffers in the placed design), and the streaming-fetch design is 3% bigger than rc1, which left global placement at its padded density limit (the anchored draws packed a corner to 90% and the router stalled there). At the 30 ns clock the worst setup slack is 6 ns, so a fanout of 16 costs nothing in timing; the slew and cap repairs (20% margins) stay. Measured first with TO=OpenROAD.GlobalRouting.",
+  "MAX_FANOUT_CONSTRAINT": 16
+}

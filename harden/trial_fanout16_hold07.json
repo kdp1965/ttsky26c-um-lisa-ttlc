@@ -1,0 +1,5 @@
+{
+  "//": "Trial: trial_fanout16.json plus the post-CTS hold margin 0.1 -> 0.07 ns, the middle point between the default (1346 hold buffers, 7% of the cell area) and 0.05 (191 hold buffers, macro-fanout16-hold05-grt). Measured to global routing to see how many hold buffers each 10 ps of margin costs.",
+  "MAX_FANOUT_CONSTRAINT": 16,
+  "PL_RESIZER_HOLD_SLACK_MARGIN": 0.07
+}

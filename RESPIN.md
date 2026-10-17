@@ -653,8 +653,39 @@ testbenches (see the commit).
   waiting, the rest of its time in the UART poll). The remaining wait is
   the QSPI word rate, 10 clocks a word at SCLK = clk/2 against 3-4 clocks
   an instruction. Standalone synthesis: inst_stream 9529 um2 (159 flops)
-  against inst_cache's 3909 (84), +1.6% of the core. The release
-  candidate rc1 is unchanged; a rebuild adopts this.
+  against inst_cache's 3909 (84), +1.6% of the core. Hardened the same
+  day (below); rc2 adopts it.
+* Hardening the streaming RTL (2026-10-17): 3% more standard-cell area
+  than rc1 (144.6k against 140.1k um2 synthesized, 189k against 183k
+  placed, 76% utilization) put the padded placement at its density limit
+  and the router stalled on every draw: free (overlay trial_ao_tight.json)
+  global-route overflow 1707 and 12K violations after 12 iterations, each
+  slower than the last; anchored to rc1's table (6448 cells matched after
+  the RTL change, the rest free) overflow 263 and 149 in two draws, the
+  first down to 1 violation stuck for four iterations of 50 minutes, the
+  second on the same path. The violations sat in whichever corner the
+  draw packed to 90% in 30 um bins: the debug UART cluster top left (x
+  30-150, y 390-510) or the TTLC shift_reg_io block top right (x 600-660,
+  y 420-480), 71-77% in rc1. Padding was already 2, so the lever had to
+  be area, measured in 8-minute runs to global routing (`make macro
+  TO=OpenROAD.GlobalRouting OVERLAY=...`): MAX_FANOUT_CONSTRAINT 10 -> 16
+  (trial_fanout16.json) removed 480 of the 3026 repair buffers but
+  repair_design upsized their drivers instead, no area back (overflow 149
+  -> 115); the hold margin PL_RESIZER_HOLD_SLACK_MARGIN 0.1 -> 0.05 ns
+  (trial_fanout16_hold05.json) took the 1346 hold buffers to 191 - the
+  flop-to-flop paths sit in a 50-100 ps band of raw hold slack at the
+  fast corner, about 400 buffers per 10 ps - 11k um2 back, overflow 59,
+  the corners at rc1's density; 0.07 ns (trial_fanout16_hold07.json) 591
+  buffers, 7.4k um2 back, overflow 35, 8 bins over 90% against rc1's 14.
+  Both routed clean in 12-14 iterations, 45 minutes end to end, Magic DRC
+  / LVS / antenna 0, setup +5.5 ns nominal and -6.1 / -7.2 at ss (rc1
+  -5.8), hold worst slack 0.056 / 0.077 ns at the fast corner (rc1 0.109),
+  max-fanout violations 36 / 35 (146), max-slew 7900 / 8040 (11320).
+  Ken chose 0.07 (runs/macro-stream-fo16-hold07): `gds/`, `lef/`, `pnl/`
+  are its results, macro.json carries the two knobs and its placement as
+  the anchor table (placements/macro-stream-fo16-hold07_final_cells.json;
+  ao5's kept) - rc2, the release candidate for the streaming fetch and the
+  stack convention (item 16).
 * Found on the way: Yosys names a flattened net after any alias (the
   debugger's data bus is `core_inst_o[*]` in the netlist), the breakpoint
   registers are latches, and OpenSTA's `read_sdc` fails on an exception
