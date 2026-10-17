@@ -545,6 +545,29 @@ for loading code). By design; keep, and keep it out of the debuggers' polls
   20 minutes. The smaller macro moves the design away from the
   routability threshold; an anchor table dumped from ao4
   (`placements/macro-ao4_final_cells.json`) makes that draw repeatable.
+  Ken's next question: is the halo needed, especially below the macro?
+  No: every tile pin is on the top edge and in ao4 not one net segment
+  crosses the 10 um under the macro, yet the halo cost 48 rows for a
+  43-row macro (at y 10 the macro straddled two rows and the 6 um halo
+  rounded to whole rows above and below) plus 10 um on its left.
+  `trial_ao_tight.json`: the macro on the core's bottom row (y 2.72, on
+  the row grid; its rows are then flipped against the tile's, harmless
+  across the halo - y 5.44 would match them at the cost of the row under
+  it), vertical halo 1 um (cut_rows cuts the row that overlaps the halo
+  box, not one that only touches it, so exactly the row on the macro's
+  top edge goes), horizontal halo 2 um, and FP_PRUNE_THRESHOLD 11
+  (cut_rows' -row_min_width) dropping the 17-site row stubs between the
+  macro and the right core edge instead of a 10 um halo swallowing them:
+  44 rows lost instead of 48, 4600 um2 (1.4% of the core) back.
+  runs/macro-ao5 signed off: routed clean in 11 iterations, Magic DRC 0,
+  LVS clean, antenna clean, IR drop 0.3 mV, hold met, setup +5.5 ns
+  nominal / -5.8 at ss, wirelength 812K um (829K), dense bins 14 (15, the
+  densest 0.99 against 1.06), every power port box full height, 18
+  minutes. The area is small (the freed rows hold the same logic/fill mix
+  as before and the fill grew by the same 5000 um2) but the margin it
+  gives the router is real. The DFFRAM macro keeps its own 2.72 um row
+  margin top and bottom and 1.38 um left and right, so the tile's cells
+  are never closer than that to the macro's.
 * Found on the way: Yosys names a flattened net after any alias (the
   debugger's data bus is `core_inst_o[*]` in the netlist), the breakpoint
   registers are latches, and OpenSTA's `read_sdc` fails on an exception

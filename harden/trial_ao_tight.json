@@ -1,0 +1,52 @@
+{
+  "//": "Trial: trial_ao_free.json (the AND-OR RAM32, no anchors) with the halo taken away: the macro at the bottom of the core on the row grid (y 2.72; nothing is routed under it - every tile pin is on the top edge), a 1 um vertical halo (cut_rows cuts the row that overlaps the halo box, not one that only touches it: the row on the macro's top edge goes and the next is the first full row - 44 rows lost instead of 48), a 2 um horizontal halo, and FP_PRUNE_THRESHOLD (cut_rows -row_min_width) dropping the 17-site row stubs between the macro and the right core edge that pdngen could not power (PDN-0179 at halo 6, the reason for the 10 um halo).  Run as macro-ao5 with a project step that deleted the same 44 stubs.",
+  "MACROS": {
+    "RAM32": {
+      "instances": {
+        "ram1": {
+          "location": [
+            349.83,
+            2.72
+          ],
+          "orientation": "N"
+        }
+      },
+      "gds": [
+        "dir::../macros_ao/RAM32.gds"
+      ],
+      "lef": [
+        "dir::../macros_ao/RAM32.lef"
+      ],
+      "nl": [
+        "dir::../macros_ao/RAM32.nl.v"
+      ],
+      "spef": {
+        "min_*": [
+          "dir::../macros_ao/RAM32.min_.spef"
+        ],
+        "nom_*": [
+          "dir::../macros_ao/RAM32.nom_.spef"
+        ],
+        "max_*": [
+          "dir::../macros_ao/RAM32.max_.spef"
+        ]
+      },
+      "lib": {
+        "min_tt_025C_1v80": "dir::../macros_ao/RAM32.lib/min_tt_025C_1v80/RAM32__min_tt_025C_1v80.lib",
+        "min_ff_n40C_1v95": "dir::../macros_ao/RAM32.lib/min_ff_n40C_1v95/RAM32__min_ff_n40C_1v95.lib",
+        "max_ff_n40C_1v95": "dir::../macros_ao/RAM32.lib/max_ff_n40C_1v95/RAM32__max_ff_n40C_1v95.lib",
+        "nom_tt_025C_1v80": "dir::../macros_ao/RAM32.lib/nom_tt_025C_1v80/RAM32__nom_tt_025C_1v80.lib",
+        "min_ss_100C_1v60": "dir::../macros_ao/RAM32.lib/min_ss_100C_1v60/RAM32__min_ss_100C_1v60.lib",
+        "max_ss_100C_1v60": "dir::../macros_ao/RAM32.lib/max_ss_100C_1v60/RAM32__max_ss_100C_1v60.lib",
+        "max_tt_025C_1v80": "dir::../macros_ao/RAM32.lib/max_tt_025C_1v80/RAM32__max_tt_025C_1v80.lib",
+        "nom_ss_100C_1v60": "dir::../macros_ao/RAM32.lib/nom_ss_100C_1v60/RAM32__nom_ss_100C_1v60.lib",
+        "nom_ff_n40C_1v95": "dir::../macros_ao/RAM32.lib/nom_ff_n40C_1v95/RAM32__nom_ff_n40C_1v95.lib"
+      }
+    }
+  },
+  "FP_MACRO_HORIZONTAL_HALO": 2,
+  "ANCHOR_CELLS_TABLE": null,
+  "ANCHOR_SEQ_TABLE": null,
+  "FP_MACRO_VERTICAL_HALO": 1,
+  "FP_PRUNE_THRESHOLD": 11
+}
