@@ -7,20 +7,21 @@
 
 volatile unsigned char canary0, canary1;
 
-/* __sdcccall(0) with the compiler's sra: saved RA 1,2(sp), the return slot
-   3,4(sp), n at 5,6(sp), d at 7,8(sp) */
+/* __sdcccall(0) with the compiler's sra, SP at the top byte (sdcc --rev2):
+   saved RA 0,1(sp), the return slot 2,3(sp), n at 4,5(sp), d at 6,7(sp);
+   push a puts the byte at 0(sp) */
 #define RAWDIV(name, op, form, pops)                                 \
 static unsigned int name(unsigned int n, unsigned int d) __sdcccall(0) \
 {                                                                      \
-  __asm__("ldax 6(sp)\n\tpush a\n\tldax 6(sp)\n\tlddiv 1(sp)\n\tads #1\n\t" \
-          "ldax 8(sp)\n\tpush a\n\tpush a\n\tldax 9(sp)\n\t"           \
+  __asm__("ldax 5(sp)\n\tpush a\n\tldax 5(sp)\n\tlddiv 0(sp)\n\tads #1\n\t" \
+          "ldax 7(sp)\n\tpush a\n\tpush a\n\tldax 8(sp)\n\t"           \
           op " " form "\n\tads #" pops "\n\t"                          \
-          "xchg ra\n\ttxa\n\tstax 3(sp)\n\ttxau\n\tstax 4(sp)");       \
+          "xchg ra\n\ttxa\n\tstax 2(sp)\n\ttxau\n\tstax 3(sp)");       \
 }
 
-RAWDIV(raw_div, "div", "0, 2(sp)", "2")     /* 16 / 16 */
-RAWDIV(raw_rem, "rem", "0, 2(sp)", "2")
-RAWDIV(raw_div1, "div", "0, 1(sp)", "2")    /* the form whose offset word has bit 1 clear */
+RAWDIV(raw_div, "div", "0, 1(sp)", "2")     /* 16 / 16 */
+RAWDIV(raw_rem, "rem", "0, 1(sp)", "2")
+RAWDIV(raw_div1, "div", "0, 0(sp)", "2")    /* the other offset word (TT07 wrote to address 1 with 1(sp)) */
 RAWDIV(raw_div8, "div", "1", "2")           /* 16 / A */
 
 void main(void)

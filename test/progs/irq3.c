@@ -11,7 +11,7 @@
 /* irq3.c: test_irq.c with the values of check 3 printed */
 #include <tt07.h>
 
-volatile unsigned char ticks;
+volatile unsigned int ticks;    /* 16 bits: check 3 holds past 255 ticks */
 volatile unsigned int isr_sum;
 
 void timer1_isr(void) __interrupt(LISA_INT_TIMER1)
@@ -41,14 +41,17 @@ static unsigned long work(unsigned int n)
 int main(void)
 {
   unsigned long expect, got;
-  unsigned char t0, t1;
+  unsigned int t0, t1;
 
   expect = work(300);           /* without interrupts */
 
   TIMER1_CTRL = 0;
   TIMER1_PREDIV_LO = 0x1f;      /* 50 MHz / 32: fast enough to interrupt the work many times */
   TIMER1_PREDIV_HI = 0x00;
-  TIMER1_DIV_LO = 20;
+  TIMER1_DIV_LO = 100;          /* a tick every 3200 clocks: lisa_sim runs work(300) in ~135K cycles
+                                   (40 ticks); the RTL testbenches take 3-25x longer and the handler
+                                   itself ~50 instructions, so 640 clocks (DIV 20) overflowed a byte
+                                   counter on the core bench and never left the handler on the chip */
   TIMER1_DIV_HI = 0;
   INT_STATUS = 0xff;
   ticks = 0;

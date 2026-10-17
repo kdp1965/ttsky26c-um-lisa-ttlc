@@ -5,11 +5,12 @@
  * 0x0100 and 0x4100 sit in lines 0 and 4, 0x0140 / 0x4140 evict them. */
 #include "harness.h"
 
+/* the frames as sdcc --rev2 lays them out: SP at the top byte, a at 0(sp) */
 static void poke(unsigned int a, unsigned char v) __naked
 {
   __asm
-    ldxx 1(sp)
-    ldax 3(sp)
+    ldxx 0(sp)
+    ldax 2(sp)
     stax 0(ix)
     ret
   __endasm;
@@ -18,7 +19,7 @@ static void poke(unsigned int a, unsigned char v) __naked
 static unsigned char peek(unsigned int a) __naked
 {
   __asm
-    ldxx 1(sp)
+    ldxx 0(sp)
     ldax 0(ix)
     ret
   __endasm;

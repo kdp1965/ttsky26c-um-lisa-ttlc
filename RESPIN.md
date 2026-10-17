@@ -284,12 +284,21 @@ and `lisa_cdb` (the debuggers' frame unwinding) takes the top's offset
 from `Cdb::set_sp_top`. The SDCC suite passes both ways (`make check
 REV2=1`, `make test-lisa LISA_REV2=1`).
 
-RTL: to do. `lisa_core.v`'s SP paths for `push a`, `pop a`, `sra`, `lra`,
-`push ix`, `pop ix`: the address of the write becomes SP − 1 (SP − 2 for
-the second byte) with SP decremented in the same cycle, the read SP (SP +
-1) with the increment after. Nothing else changes (`n(sp)` stays SP + n,
-`ads` as it is). Verify: test/core with a `--rev2` build of the suite,
-then the chip testbench.
+RTL (done 2026-10-17): one adder. `lisa_core.v`'s `sp_adder` gives the
+push ops (`push a`, `sra`, `push ix`) −1 instead of 0 and the pop ops
+(`pop a`, `lra`, `pop ix`) 0 instead of +1; the SP updates themselves
+(the delayed decrement as the write completes, the increment as the read
+is consumed, twice for the two-byte ops) are as they were, so each byte
+lands one address lower than on TT07 and SP ends at it. Nothing else
+changed (`n(sp)` stays SP + n, `ads`, `spix`, `xchg sp`, the interrupt
+entry, which keeps the return address in IA). The testbenches follow it:
+the probe programs in `test/progs` are built with `sdcc --rev2` (their
+hand-written frames in `alu2.c`, `div16.c`, `swap.c`, `cache14.c`
+renumbered; `cache14` with `--stack-loc 0x7fff` instead of `--tt07-cache`,
+which `--rev2` excludes), `test_core.py` reads a pushed byte at SP, and
+`run_suite.sh ... REV2=1` runs the `*_rev2.ihx` suite. Verified: the
+probes and the debug-port tests on test/core, the rev-2 suite on both
+testbenches (see the commit).
 
 ## Verification (test/, see test/README.md)
 
@@ -671,6 +680,16 @@ then the chip testbench.
   (lisa-tools a453dec) and passes with the default limit. Left on the chip
   testbench: test_bigframe and test_ptroff, which need the data cache
   (they pass in the CACHE=1 list), and test_irq, which prints nothing.
+* test_irq (2026-10-17): the test's timer, not the chip. Its tick came
+  every 640 clocks (TIMER1_DIV 20) into a byte counter: lisa_sim ran
+  work(300) in 135K cycles (212 ticks), the core testbench at 3-4 clocks
+  an instruction overflowed the byte (check 3 compares the 16-bit sum
+  with the count) - it had failed there since 2026-10-15 (test/core/
+  r_irq.xml) - and on the chip testbench the ~50-instruction handler took
+  longer than the period, so nothing was ever printed. The counter is 16
+  bits and the tick every 3200 clocks (lisa-tools sdcc_test/test_irq.c,
+  test/progs/irq3.c): 43 ticks on lisa_sim, 183 on the core testbench,
+  passes on both testbenches and both simulator modes.
 
 ## Decisions (Ken, 2026-10-15)
 

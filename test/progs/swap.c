@@ -10,9 +10,9 @@ static void probe_sp(void) __naked
 {
   __asm
     ldi  #0x80
-    push a                  ; 1(sp) = 0x80
+    push a                  ; 0(sp) = 0x80 (SP at the pushed byte)
     ldi  #0x11
-    swap 1(sp)              ; A <- 0x80, 1(sp) <- 0x11
+    swap 0(sp)              ; A <- 0x80, 0(sp) <- 0x11
     sta  _sp_val
     pop  a
     sta  _sp_slot

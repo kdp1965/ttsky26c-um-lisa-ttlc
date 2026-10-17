@@ -5,13 +5,13 @@
  * on both chips (it avoids the broken forms). */
 #include "harness.h"
 
-/* __sdcccall(0) frames with the compiler's sra: saved RA 1,2(sp), return
-   slot 3,4(sp), a 5(sp), b 6(sp), c 7(sp).  Results come back as
-   {flag << 8 | A}. */
+/* __sdcccall(0) frames with the compiler's sra, SP at the top byte (the
+   second chip's convention, sdcc --rev2): saved RA 0,1(sp), return slot
+   2,3(sp), a 4(sp), b 5(sp), c 6(sp).  Results come back as {flag << 8 | A}. */
 #define ADC_K(name, k)                                                     \
 static unsigned int name(unsigned char a, unsigned char c) __sdcccall(0)  \
-{ __asm__("ldax 6(sp)\n\tshr\n\tldax 5(sp)\n\tadc #" k                   \
-          "\n\tstax 3(sp)\n\tldac c\n\tstax 4(sp)"); }
+{ __asm__("ldax 5(sp)\n\tshr\n\tldax 4(sp)\n\tadc #" k                   \
+          "\n\tstax 2(sp)\n\tldac c\n\tstax 3(sp)"); }
 ADC_K(adc_00, "0x00")
 ADC_K(adc_01, "0x01")
 ADC_K(adc_7f, "0x7f")
@@ -21,25 +21,25 @@ ADC_K(adc_ff, "0xff")
 
 #define MEM_OP(name, op)                                                   \
 static unsigned int name(unsigned char a, unsigned char b, unsigned char c) __sdcccall(0) \
-{ __asm__("ldax 7(sp)\n\tshr\n\tldax 5(sp)\n\t" op " 6(sp)"               \
-          "\n\tstax 3(sp)\n\tldac c\n\tstax 4(sp)"); }
+{ __asm__("ldax 6(sp)\n\tshr\n\tldax 4(sp)\n\t" op " 5(sp)"               \
+          "\n\tstax 2(sp)\n\tldac c\n\tstax 3(sp)"); }
 MEM_OP(add_m, "add")
 MEM_OP(sub_m, "sub")
 MEM_OP(cmp_m, "cmp")
 
 /* cmp: Z in bit 8 */
 static unsigned int cmp_z(unsigned char a, unsigned char b) __sdcccall(0)
-{ __asm__("ldax 5(sp)\n\tcmp 6(sp)\n\tstax 3(sp)\n\tldac z\n\tstax 4(sp)"); }
+{ __asm__("ldax 4(sp)\n\tcmp 5(sp)\n\tstax 2(sp)\n\tldac z\n\tstax 3(sp)"); }
 /* cmp then if slt: 1 if a < b as signed bytes */
 static unsigned int cmp_slt(unsigned char a, unsigned char b) __sdcccall(0)
-{ __asm__("ldax 5(sp)\n\tcmp 6(sp)\n\tifte slt\n\tldi.p #1\n\tldi.p #0\n\tstax 3(sp)\n\tldi #0\n\tstax 4(sp)"); }
+{ __asm__("ldax 4(sp)\n\tcmp 5(sp)\n\tifte slt\n\tldi.p #1\n\tldi.p #0\n\tstax 2(sp)\n\tldi #0\n\tstax 3(sp)"); }
 static unsigned int cmp_sgt(unsigned char a, unsigned char b) __sdcccall(0)
-{ __asm__("ldax 5(sp)\n\tcmp 6(sp)\n\tifte sgt\n\tldi.p #1\n\tldi.p #0\n\tstax 3(sp)\n\tldi #0\n\tstax 4(sp)"); }
+{ __asm__("ldax 4(sp)\n\tcmp 5(sp)\n\tifte sgt\n\tldi.p #1\n\tldi.p #0\n\tstax 2(sp)\n\tldi #0\n\tstax 3(sp)"); }
 
 #define CPI_K(name, k)                                                     \
 static unsigned int name(unsigned char a) __sdcccall(0)                   \
-{ __asm__("ldax 5(sp)\n\tcpi #" k "\n\tldac c\n\tstax 4(sp)\n\tldax 5(sp)\n\tcpi #" k \
-          "\n\tifte slt\n\tldi.p #1\n\tldi.p #0\n\tstax 3(sp)"); }
+{ __asm__("ldax 4(sp)\n\tcpi #" k "\n\tldac c\n\tstax 3(sp)\n\tldax 4(sp)\n\tcpi #" k \
+          "\n\tifte slt\n\tldi.p #1\n\tldi.p #0\n\tstax 2(sp)"); }
 CPI_K(cpi_00, "0x00")
 CPI_K(cpi_01, "0x01")
 CPI_K(cpi_7f, "0x7f")

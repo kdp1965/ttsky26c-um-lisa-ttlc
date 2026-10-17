@@ -73,17 +73,17 @@ Uses a 14 (or 16) bit program word.  Shown is the 14-bit version.  For 16-bit, e
     10 1000 00011101   notz
     10 1000 00011110   ei/di                Enable/Disable Interrupt as per inst[0]
     10 1000 00011111   brk                  Software breakpoint
-    10 1000 00100xxx   push a               Push acc (and cflag) to stack.
-    10 1000 00110xxx   pop a                Pop acc (and cflag) from stack
+    10 1000 00100xxx   push a               Push acc to stack: sp--, M[sp] <= a
+    10 1000 00110xxx   pop a                Pop acc from stack: a <= M[sp], sp++
     10 1000 010000ux   tax                  Transfer A to IX[7:0]/IX[14:8] based on u
     10 1000 01001000   ldirq                A <= {irq_z, irq_c}
     10 1000 01001001   stirq                {irq_z, irq_c} <= A
     10 1000 010100mm   amode                Set arithemetc mode ([signed:shift])
-    10 1000 01011000   sra                  Save Return Address
-    10 1000 01011001   lra                  Load Return Address
-    10 1000 01011010   push ix              Push ix to stack
-    10 1000 01011011   pop ix               Pop ix from stack0
-    10 1000 01011100   lddiv                Load dividend from stack: ra[7:0]<=1(sp) ix[7:0]<=a
+    10 1000 01011000   sra                  Save Return Address: M[sp-1] <= ra[7:0], M[sp-2] <= {cond, ra[14:8]}, sp -= 2
+    10 1000 01011001   lra                  Load Return Address: {cond, ra[14:8]} <= M[sp], ra[7:0] <= M[sp+1], sp += 2
+    10 1000 01011010   push ix              Push ix to stack (as sra: ix[7:0] at sp-1, {ix_cond, ix[14:8]} at sp-2)
+    10 1000 01011011   pop ix               Pop ix from stack (as lra)
+    10 1000 01011100   lddiv                Load dividend from stack: ra[7:0]<=n(sp) (n in the 2nd word) ix[7:0]<=a
     10 1000 01011110   savec                Save cflag
     10 1000 01011111   restc                Restore cflag
     10 1000 01100000   ldx                  Load ix with data in next opcode
@@ -649,13 +649,21 @@ module lisa_core
    assign pc_rel   = pc + {{(PC_BITS-11){inst[10]}}, inst[10:0]};
    assign ix_sum   = ix + {{(PC_BITS-10){inst[9]}}, inst[9:0]};
    assign ix_addr  = ix + {{(PC_BITS-9){1'b0}}, inst[8:0]};
-   assign sp_adder = (op_sra_r | op_push_a_r | op_push_ix_r) ? {D_BITS{1'b0}} :
+   // The stack: push a / sra / push ix write at SP - 1 and SP is decremented
+   // as the write completes (the delayed decrement below), pop a / lra /
+   // pop ix read at SP and increment it after, so SP is the address of the
+   // byte on top and 0(sp) the top of a frame.  TT07 wrote at SP and read at
+   // SP + 1 (SP one below the top, the top at 1(sp)); the toolchain's --rev2
+   // builds are laid out for this one.  The two bytes of sra / push ix keep
+   // their order: the low byte first (at SP - 1), then the high byte with
+   // the condition bit (at SP - 2, the lower address).
+   assign sp_adder = (op_sra_r | op_push_a_r | op_push_ix_r) ? {D_BITS{1'b1}} :
                      (((op_ldxx_r | op_stxx_r ) & stage_two) |
                         lddiv_stage_two | div_stage_two  |
                         rem_stage_two)                       ? {{(D_BITS-D_STCK){1'b0}}, inst[D_STCK-1:0]} :
                      ((op_ldxx_r | op_stxx_r) & !stage_two)  ? {{(D_BITS-D_STCK){1'b0}}, inst[D_STCK-1:0]}+1 :
                      (op_shl16_r | op_shr16_r)               ? {{(D_BITS-2){1'b0}}, inst[1:0]} :
-                     (op_lra_r | op_pop_a_r | op_pop_ix_r)   ? {{(D_BITS-1){1'b0}}, 1'b1} :
+                     (op_lra_r | op_pop_a_r | op_pop_ix_r)   ? {D_BITS{1'b0}} :
                                                                {{(D_BITS-D_INST){inst[9]}}, inst[9:0]};
    assign sp_sum   = sp + sp_adder;
    assign sp_addr  = sp + {{(D_BITS-D_STCK){1'b0}}, inst[D_STCK-1:0]};

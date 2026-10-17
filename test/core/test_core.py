@@ -170,7 +170,7 @@ async def test_program(dut):
     core = Core(dut)
     cache = plusarg('CACHE') is not None
     await core.start(cache=cache)
-    timeout = int(plusarg('TIMEOUT', 500_000))
+    timeout = int(plusarg('TIMEOUT', 6_000_000))   # clocks of console silence (run_suite.sh's default; irq3 and alu2 compute for >500K before their first line)
     dut._log.info('running %s, data cache %s' % (plusarg('PROGRAM', '?'), 'on' if cache else 'off'))
     stop = plusarg('STOP')
     text = await core.run(timeout, stop_at=(stop,) if stop else ('ALL PASSED', 'SOME FAILED'), send=plusarg('SEND'))
@@ -264,7 +264,7 @@ async def test_bp_after_store(dut):
     r = await core.regs()
     assert r['pc'] == pcs[0xc3]
     assert (await core.read_ram(g2)) == 0xc2
-    assert (await core.read_ram(sp)) == 0xc2, 'the push before the breakpoint was lost (slot 0x%04x)' % sp
+    assert (await core.read_ram(sp - 1)) == 0xc2, 'the push before the breakpoint was lost (slot 0x%04x)' % (sp - 1)   # push a: sp--, M[sp] <= a
     assert (await core.read_ram(0x60)) == 0x3c, 'RAM[IX] was overwritten at the halt'
     await core.set_breakpoint(0, None)
 
@@ -287,7 +287,7 @@ async def test_single_step(dut):
         if i == 3:
             assert (await core.read_ram(g2)) == 0xc2, 'sta _g2 did not land after its step'
         if i == 4:
-            assert (await core.read_ram(r['sp'] + 1)) == 0xc2, 'push a did not land after its step'
+            assert (await core.read_ram(r['sp'])) == 0xc2, 'push a did not land after its step'   # SP is at the pushed byte
     assert (await core.read_reg(REG_STATUS)) & 1 == 1, 'not halted after a step'
 
 
@@ -321,8 +321,10 @@ async def test_irq_trace(dut):
     core = Core(dut)
     await core.start()
     words = load_words(plusarg('FIRMWARE'))
-    adcs = [pc + 1 for pc in words if words.get(pc) == 0xf202 and words.get(pc + 1) == 0x9001]
-    dut._log.info('ldax 2(sp); adc #1 at %s' % ['0x%04x' % p for p in adcs])
+    # the handler's t += 0x0101 high byte: ldax 3(sp) (0xf203: t at 2,3(sp) above the 16-bit tick
+    # count in the rev-2 frame; the only ldax n(sp) followed directly by adc #1) then adc #1 (0x9001)
+    adcs = [pc + 1 for pc in words if words.get(pc) == 0xf203 and words.get(pc + 1) == 0x9001]
+    dut._log.info('ldax 3(sp); adc #1 at %s' % ['0x%04x' % p for p in adcs])
     c = dut.i_lisa_core
     await core.core_reset()
     await core.write_reg(REG_PC, 0)

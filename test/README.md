@@ -17,7 +17,9 @@ setup (`setup()`), `run()` of a program with its console text.
 make                          # test_debugger, test_bringup (progs/hello.hex), test_uart_burst
 make TTLC=1                   # the TTLC loopback through the chains, its breakpoints and step
 make IHX=../../lisa-tools/sdcc_test/test_core.ihx [CACHE=1] [TIMEOUT=clocks]
-./run_suite.sh chip           # the SDCC suite's self-checking programs
+./run_suite.sh chip REV2=1    # the SDCC suite's self-checking programs (the
+                              # *_rev2.ihx of `make check REV2=1`: this RTL's
+                              # stack convention; without REV2=1 the TT07 build)
 make SIM=icarus               # what CI runs
 ```
 
@@ -55,6 +57,8 @@ The probe programs, each for an item of `RESPIN.md`: `hello` (the
 bring-up image), `alu2` (the ALU flags against the compiler's arithmetic),
 `reti`, `div16`, `cache14`, `swap`, `dbg` (a loop for the debugger tests),
 `irq3` (test_irq with its check 3 values printed), and `ttlc/` (the TTLC
-loopback). `make` there rebuilds them with `sdcc -mlisa` from lisa-tools;
-the `.hex` images are committed so the testbenches run without it.
+loopback). `make` there rebuilds them with `sdcc -mlisa --rev2` from
+lisa-tools (the second chip's stack convention, SP at the top byte, since
+2026-10-17: a TT07 build's frames are one byte off on this RTL); the `.hex`
+images are committed so the testbenches run without it.
 `ihx2hex.py` converts Intel HEX, `hexcat.py` places images in one flash.
