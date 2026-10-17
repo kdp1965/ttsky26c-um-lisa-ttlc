@@ -623,6 +623,16 @@ for loading code). By design; keep, and keep it out of the debuggers' polls
   command whose text holds an inline `[expr {...}]` (it takes the command
   text as a list to record the SDC line).
 
+* The suite's known failures, first test_bf16 (2026-10-17): its checks 33
+  and 34 asserted the TT07 adder's two defects through `bf16_fadd_raw` and
+  so failed on the rewritten adder, which gets them right. The test now
+  probes which adder is there (1.75 + 1.75: 3.5, or TT07's 2.75) and expects
+  the defects or the right answers accordingly, and on the fixed adder
+  checks the raw add on its other vectors too (nearest even, the
+  infinities, NaN, the smallest normals); it passes here and on lisa_sim's
+  TT07 model (lisa-tools 8fd7e53). `bf16_add` stays the software one on
+  both chips; the fixed adder can serve it under the planned `sdcc --rev2`.
+
 ## Decisions (Ken, 2026-10-15)
 
 * 8, the divider: whatever gives the most efficient code, with a compiler
