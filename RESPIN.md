@@ -630,8 +630,10 @@ for loading code). By design; keep, and keep it out of the debuggers' polls
   the defects or the right answers accordingly, and on the fixed adder
   checks the raw add on its other vectors too (nearest even, the
   infinities, NaN, the smallest normals); it passes here and on lisa_sim's
-  TT07 model (lisa-tools 8fd7e53). `bf16_add` stays the software one on
-  both chips; the fixed adder can serve it under the planned `sdcc --rev2`.
+  TT07 model (lisa-tools 8fd7e53). `sdcc -mlisa --rev2` (sdcc-lisa
+  47ad0a4) now links a library whose `bf16_add` is this adder (15
+  instructions instead of the software addition; `--bf16-float`'s
+  additions too); test_bf16 and test_bf16f built with it pass here.
 
 ## Decisions (Ken, 2026-10-15)
 
