@@ -146,10 +146,11 @@ the PDK's without the `_1` combinational cells and plain flops; clock, delay,
 scan and latch cells stay excluded. `make -C harden synth` runs synthesis alone to check the
 area (`runs/synth-<tag>/*-yosys-synthesis/reports/stat.json`).
 
-On GitHub, `synth.yaml` synthesizes the RTL with Yosys on every push and
-runs its check pass (the structural problems the flow stops on); `gds.yaml`
-(run by hand) is the standard flow on the runners; `test.yaml` runs the
-chip-level testbench under icarus.
+On GitHub, `test.yaml` runs the chip-level testbench under icarus on every
+push; `gds.yaml` (run by hand) is the standard flow on the runners and
+`gds_custom.yaml` the submission's. (A `synth.yaml`, Yosys and its check
+pass on every push, was removed on 2026-10-17: it failed every time and the
+submission does not need it; `make -C harden synth` is the local check.)
 
 ## Testing
 

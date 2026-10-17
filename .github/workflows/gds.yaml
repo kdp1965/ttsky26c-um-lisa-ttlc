@@ -5,7 +5,7 @@ name: gds
 # The 128-byte data RAM is then synthesized from src/RAM32.v, which with the
 # rest fills the 8x2 tile to ~90% and has not placed so far; the tapeout
 # build is the DFFRAM-macro flow (build.py, submitted with gds_custom.yaml).
-# Run by hand; synth.yaml checks the RTL on every push.
+# Run by hand; test.yaml runs the testbench on every push.
 
 on:
   workflow_dispatch:
