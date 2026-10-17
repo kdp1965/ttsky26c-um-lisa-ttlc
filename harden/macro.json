@@ -1,13 +1,14 @@
 {
-  "//": "The RAM32 DFFRAM macro (macros/) instead of the synthesized src/RAM32.v: at the right edge, bottom row; the tile's stripes are run over its met4 power pins by flow.py's Tile.ExtendPowerStripes, so pdngen's own connectivity check is not the verdict; src/RAM32.v stays as a model for lint (EXTRA_VERILOG_MODELS), the macro's netlist has no power pins",
+  "//": "The RAM32 DFFRAM macro (macros/, the AND-OR read path built in DFFRAM.librelane models/ram_ao, 320.16 x 116.96) instead of the synthesized src/RAM32.v: on the core's bottom row at the right (x 349.83 = 9 x 38.87, the tile's stripe pitch, so its power pin columns lie on tile stripes; y 2.72, the row grid), halos 2 x 1 um (the macro keeps its own 2.72 / 1.38 um margins; cut_rows cuts the row overlapping the halo, a touching one survives) and FP_PRUNE_THRESHOLD dropping the 17-site row stubs between the macro and the core edge that pdngen could not power (PDN-0179; RESPIN.md, the halo trial). The tile's stripes are run over its met4 power pins by flow.py's Tile.ExtendPowerStripes, so pdngen's own connectivity check is not the verdict; src/RAM32.v stays as a model for lint (EXTRA_VERILOG_MODELS), the macro's netlist has no power pins",
   "REMOVE_SOURCES": [
     "RAM32.v"
   ],
   "//": "GPL_CELL_PADDING 2 (a site each side of every cell in global placement, +35% on this design's 2.6 um average cell) reserves the room the flow fills afterwards: the std cells are 60% of the rows after placement and the slew/fanout repair (+16%, 2598 buffers), CTS (+4%) and the 1400 hold buffers (+10%) then took the densest 30 um bins to 92-100%, where the detailed router did not converge (density 85 and 68 alike: 48 and 46 bins over 90%). With the padding the placer's utilization is 81%, so the target density goes back up to 85 (81% of a bin in padded cells is 63% in real ones). TT07 placed at 77 on the 8x2 tile.",
   "GPL_CELL_PADDING": 2,
   "PL_TARGET_DENSITY_PCT": 85,
-  "FP_MACRO_HORIZONTAL_HALO": 6,
-  "FP_MACRO_VERTICAL_HALO": 6,
+  "FP_MACRO_HORIZONTAL_HALO": 2,
+  "FP_MACRO_VERTICAL_HALO": 1,
+  "FP_PRUNE_THRESHOLD": 11,
   "ERROR_ON_PDN_VIOLATIONS": false,
   "//": "PDN_CFG: LibreLane's PDN plus a met4 stripe (with pdngen's vias to the rails) on each macro power pin column that is not on a tile stripe; Tile.ExtendPowerStripes then runs the columns over the macro.",
   "PDN_CFG": "dir::pdn_macro.tcl",
@@ -19,8 +20,8 @@
       "instances": {
         "ram1": {
           "location": [
-            271.06,
-            10
+            349.83,
+            2.72
           ],
           "orientation": "N"
         }
@@ -58,8 +59,8 @@
       }
     }
   },
-  "//": "ANCHOR_CELLS_TABLE: the placement replayed from the second routed build (placements/macro-fix_final_cells.json, an odb_anchor_cells.py --dump of runs/macro-fix's final ODB): the registers matched by RTL name and the logic by structure are pinned there before global placement and released after it (flow.py, Project.AnchorSequential / ReleaseAnchors). Global placement is not deterministic and this design sits at the routability threshold: without the table a run routes or stalls by the draw, with it every run routes like the reference (RESPIN.md, the third build). Re-dump after an RTL change (unmatched cells place freely); unset it to let the placer draw.",
-  "ANCHOR_CELLS_TABLE": "dir::placements/macro-fix_final_cells.json",
+  "//": "ANCHOR_CELLS_TABLE: the placement replayed from the release candidate (placements/macro-ao5_final_cells.json, an odb_anchor_cells.py --dump of runs/macro-ao5's final ODB, itself a free draw): the registers matched by RTL name and the logic by structure are pinned there before global placement and released after it (flow.py, Project.AnchorSequential / ReleaseAnchors). Global placement is not deterministic; with the old macro the design sat at the routability threshold and a run routed or stalled by the draw (RESPIN.md, the third build; placements/macro-fix_final_cells.json was that build's table), the smaller macro took it away from the threshold and the table now only keeps the builds alike. Re-dump after an RTL change (unmatched cells place freely); unset it to let the placer draw.",
+  "ANCHOR_CELLS_TABLE": "dir::placements/macro-ao5_final_cells.json",
   "EXTRA_VERILOG_MODELS": [
     "dir::../src/RAM32.v"
   ]
